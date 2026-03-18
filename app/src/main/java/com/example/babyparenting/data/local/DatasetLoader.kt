@@ -29,26 +29,16 @@ import java.io.InputStreamReader
  */
 class DatasetLoader(private val context: Context) {
 
-    suspend fun loadAllMilestones(): List<Milestone> = withContext(Dispatchers.IO) {
-        val all = mutableListOf<Milestone>()
-        all += load0to24Child()
-        all += load0to24Parent()
-        all += load24to60Child()
-        all += load24to60Parent()
-        all += load2to5Academics()
-        all += load5to12Child()
-        all += load5to12Parent()
-        all += loadLanguage()
-        all += loadMaths()
-        all += loadScience()
-        all += loadSocial()
-        all += loadCivics()
-        all += loadCS()
-        all += loadForeign()
-        all += loadSafety()
-        android.util.Log.d("CSV_DEBUG", "Total milestones loaded: ${all.size}")
+    suspend fun loadInitialMilestones(): List<Milestone> = withContext(Dispatchers.IO) {
+        val list = mutableListOf<Milestone>()
 
-        return@withContext all.sortedWith(compareBy({ it.ageMonths }, { it.source.ordinal }))
+        // 🔥 ONLY LOAD FIRST 2 FILES (for testing)
+        list += load0to24Child()
+        list += load0to24Parent()
+
+        android.util.Log.d("CSV_DEBUG", "Loaded initial: ${list.size}")
+
+        list
     }
 
     fun getAgeGroups(): List<AgeGroup> = listOf(
@@ -182,7 +172,7 @@ class DatasetLoader(private val context: Context) {
     // ── 0_24_month_data.csv ───────────────────────────────────────────────────
 
     private fun load0to24Child(): List<Milestone> =
-        openCsv("0_24_month_data.csv").mapIndexed { idx, row ->
+        openCsv("0_24_month_data.csv").take(200) .mapIndexed { idx, row ->
             val age    = parseAgeMonth(row.col("age_month"))
             val domain = row.col("domain")
             val skill  = row.col("skill")
@@ -204,7 +194,7 @@ class DatasetLoader(private val context: Context) {
     // ── 0_24_data_parent.csv ──────────────────────────────────────────────────
 
     private fun load0to24Parent(): List<Milestone> =
-        openCsv("0_24_data_parent.csv").mapIndexed { idx, row ->
+        openCsv("0_24_data_parent.csv").take(200).mapIndexed { idx, row ->
             val age    = parseAgeMonth(row.col("age_month"))
             val domain = row.col("domain")
             val skill  = row.col("skill_name")
@@ -226,7 +216,7 @@ class DatasetLoader(private val context: Context) {
     // ── 24_60_month_data.csv ──────────────────────────────────────────────────
 
     private fun load24to60Child(): List<Milestone> =
-        openCsv("24_60_month_data.csv").mapIndexed { idx, row ->
+        openCsv("24_60_month_data.csv").take(200).mapIndexed { idx, row ->
             val ageRaw = row.col("age_month_range")
             val age    = parseAgeMonth(ageRaw)
             val domain = row.col("domain")
@@ -249,7 +239,7 @@ class DatasetLoader(private val context: Context) {
     // ── 25_60_data_parent.csv ─────────────────────────────────────────────────
 
     private fun load24to60Parent(): List<Milestone> =
-        openCsv("25_60_data_parent.csv").mapIndexed { idx, row ->
+        openCsv("25_60_data_parent.csv").take(200).mapIndexed { idx, row ->
             val ageRaw = row.col("age_month")
             val age    = parseAgeMonth(ageRaw)
             val domain = row.col("domain")
@@ -272,7 +262,7 @@ class DatasetLoader(private val context: Context) {
     // ── 2_5_academics_data.csv ────────────────────────────────────────────────
 
     private fun load2to5Academics(): List<Milestone> =
-        openCsv("2_5_academics_data.csv").mapIndexed { idx, row ->
+        openCsv("2_5_academics_data.csv").take(200).mapIndexed { idx, row ->
             val ageRaw = row.col("age_range")
             val age    = parseAgeYearToMonths(ageRaw)
             val domain = row.col("domain")
@@ -295,7 +285,7 @@ class DatasetLoader(private val context: Context) {
     // ── 5_12_year_data.csv ────────────────────────────────────────────────────
 
     private fun load5to12Child(): List<Milestone> =
-        openCsv("5_12_year_data.csv").mapIndexed { idx, row ->
+        openCsv("5_12_year_data.csv").take(200).mapIndexed { idx, row ->
             val ageRaw = row.col("age_range")
             val age    = parseAgeYearToMonths(ageRaw)
             val domain = row.col("domain")
@@ -318,7 +308,7 @@ class DatasetLoader(private val context: Context) {
     // ── 5_12_year_data_parent.csv ─────────────────────────────────────────────
 
     private fun load5to12Parent(): List<Milestone> =
-        openCsv("5_12_year_data_parent.csv").mapIndexed { idx, row ->
+        openCsv("5_12_year_data_parent.csv").take(200).mapIndexed { idx, row ->
             val ageRaw = row.col("age_year")
             val age    = parseAgeYearToMonths(ageRaw)
             val domain = row.col("domain")
@@ -341,7 +331,7 @@ class DatasetLoader(private val context: Context) {
     // ── language_5_12_data.csv ────────────────────────────────────────────────
 
     private fun loadLanguage(): List<Milestone> =
-        openCsv("language_5_12_data.csv").mapIndexed { idx, row ->
+        openCsv("language_5_12_data.csv").take(200).mapIndexed { idx, row ->
             val ageRaw   = row.col("age")
             val age      = (ageRaw.toDoubleOrNull() ?: 5.0).times(12).toInt()
             val subdomain = row.col("subdomain")

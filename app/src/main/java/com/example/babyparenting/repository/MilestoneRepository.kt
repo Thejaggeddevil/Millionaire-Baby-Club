@@ -59,7 +59,7 @@ class MilestoneRepository(private val context: Context) {
             _error.value     = null
 
             _ageGroups.value  = loader.getAgeGroups()
-            csvMilestones     = loader.loadAllMilestones()
+            csvMilestones = loader.loadInitialMilestones()
 
             mergeAndEmit()
         } catch (e: Exception) {
