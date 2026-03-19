@@ -81,7 +81,8 @@ fun BabyJourneyScreen(
     onMilestoneTapped: (Milestone) -> Unit,
     onAdminTapped: () -> Unit
 ) {
-    val milestones    by viewModel.filteredMilestones.collectAsState()
+    // ✅ visibleMilestones — sirf pehle 4, unlock hote jaayenge
+    val milestones    by viewModel.visibleMilestones.collectAsState()
     val ageGroups     by viewModel.ageGroups.collectAsState()
     val progress      by viewModel.progress.collectAsState()
     val isLoading     by viewModel.isLoading.collectAsState()
@@ -97,8 +98,8 @@ fun BabyJourneyScreen(
             .statusBarsPadding()
     ) {
         JourneyHeader(
-            progress     = progress,
-            onEditAge    = { showAgeDialog = true },
+            progress      = progress,
+            onEditAge     = { showAgeDialog = true },
             onAdminTapped = onAdminTapped
         )
         FilterRow(
@@ -108,15 +109,23 @@ fun BabyJourneyScreen(
         )
 
         when {
-            isLoading        -> LoadingView()
-            loadError != null -> ErrorView(loadError!!) { viewModel.reloadDatasets() }
+            isLoading            -> LoadingView()
+            loadError != null    -> ErrorView(loadError!!) { viewModel.reloadDatasets() }
             milestones.isEmpty() -> EmptyView()
             else -> JourneyMap(
-                milestones         = milestones,
+                milestones         = milestones,      // ✅ already filtered to visible 4
                 ageGroups          = ageGroups,
                 completedCount     = completedCount,
-                onMilestoneTapped  = onMilestoneTapped,
-                onToggleCompletion = { viewModel.toggleCompletion(it) }
+                onMilestoneTapped  = { milestone ->
+                    // ✅ locked check — locked milestone tap nahi hogi
+                    if (!viewModel.isLocked(milestone)) {
+                        onMilestoneTapped(milestone)
+                    }
+                },
+                onToggleCompletion = { id ->
+                    viewModel.toggleCompletion(id)
+                },
+                isLocked           = { viewModel.isLocked(it) }
             )
         }
     }
@@ -143,12 +152,15 @@ private fun JourneyMap(
     ageGroups: List<AgeGroup>,
     completedCount: Int,
     onMilestoneTapped: (Milestone) -> Unit,
-    onToggleCompletion: (String) -> Unit
+    onToggleCompletion: (String) -> Unit,
+    isLocked: (Milestone) -> Boolean
 ) {
-    val totalH = SEGMENT_DP * (milestones.size + ageGroups.size + 2)
+    val totalH = SEGMENT_DP * (milestones.size + 2)  // ✅ ageGroups add nahi, sirf visible milestones
 
     BoxWithConstraints(
-        Modifier.fillMaxWidth().verticalScroll(rememberScrollState())
+        Modifier
+            .fillMaxWidth()
+            .verticalScroll(rememberScrollState())
     ) {
         val density = LocalDensity.current
         val wPx     = with(density) { maxWidth.toPx() }
@@ -158,44 +170,58 @@ private fun JourneyMap(
         PathCanvas(nodes, completedCount, Modifier.fillMaxWidth().height(totalH))
         FootstepsLayer(nodes, completedCount, Modifier.fillMaxWidth().height(totalH))
 
-        var nodeIdx = 0
-        ageGroups.forEach { group ->
-            val groupMs = milestones.filter { it.ageGroupId == group.id }
-            if (groupMs.isEmpty()) return@forEach
+        // ✅ KEY FIX: ageGroups loop hatao — seedha milestones pe iterate karo
+        // Warna filter bypass hokar saare milestones render ho jaate the
+        milestones.forEachIndexed { gIdx, milestone ->
+            if (gIdx >= nodes.size) return@forEachIndexed
 
-            if (nodeIdx < nodes.size) {
-                val headerY = with(density) { nodes[nodeIdx].y.toDp() } - 50.dp
-                SectionHeader(
-                    group = group,
-                    modifier = Modifier
-                        .offset { IntOffset(with(density) { 12.dp.roundToPx() }, headerY.roundToPx()) }
-                        .widthIn(max = maxWidth - 24.dp)
-                )
-            }
+            // Section header — pehle milestone of each ageGroup pe dikhao
+            val isFirstInGroup = gIdx == 0 ||
+                    milestones[gIdx - 1].ageGroupId != milestone.ageGroupId
 
-            groupMs.forEach { milestone ->
-                val gIdx = milestones.indexOf(milestone)
-                if (gIdx < 0 || gIdx >= nodes.size) return@forEach
-                val node      = nodes[gIdx]
-                val isLeft    = gIdx % 2 == 0
-                val nodeXDp   = with(density) { node.x.toDp() }
-                val nodeYDp   = with(density) { node.y.toDp() }
-                val cardWidth = 160.dp
-                val cardX     = if (isLeft) nodeXDp + 18.dp else nodeXDp - cardWidth - 18.dp
-
-                Box(
-                    Modifier
-                        .offset { IntOffset(cardX.roundToPx(), (nodeYDp - 22.dp).roundToPx()) }
-                        .widthIn(max = cardWidth)
-                ) {
-                    MilestoneCard(
-                        milestone          = milestone,
-                        index              = gIdx,
-                        onClick            = { onMilestoneTapped(milestone) },
-                        onToggleCompletion = { onToggleCompletion(milestone.id) }
+            if (isFirstInGroup) {
+                val group = ageGroups.find { it.id == milestone.ageGroupId }
+                if (group != null) {
+                    val headerY = with(density) { nodes[gIdx].y.toDp() } - 50.dp
+                    SectionHeader(
+                        group    = group,
+                        modifier = Modifier
+                            .offset {
+                                IntOffset(
+                                    with(density) { 12.dp.roundToPx() },
+                                    headerY.roundToPx()
+                                )
+                            }
+                            .widthIn(max = maxWidth - 24.dp)
                     )
                 }
-                nodeIdx++
+            }
+
+            val node      = nodes[gIdx]
+            val isLeft    = gIdx % 2 == 0
+            val nodeXDp   = with(density) { node.x.toDp() }
+            val nodeYDp   = with(density) { node.y.toDp() }
+            val cardWidth = 160.dp
+            val cardX     = if (isLeft) nodeXDp + 18.dp else nodeXDp - cardWidth - 18.dp
+            val locked    = isLocked(milestone)
+
+            Box(
+                Modifier
+                    .offset { IntOffset(cardX.roundToPx(), (nodeYDp - 22.dp).roundToPx()) }
+                    .widthIn(max = cardWidth)
+            ) {
+                MilestoneCard(
+                    milestone          = milestone,
+                    index              = gIdx,
+                    isLocked           = locked,
+                    onClick            = {
+                        if (!locked) onMilestoneTapped(milestone)
+                    },
+                    onToggleCompletion = {
+                        // ✅ locked nahi hai toh hi complete hoga
+                        if (!locked) onToggleCompletion(milestone.id)
+                    }
+                )
             }
         }
     }
@@ -229,10 +255,9 @@ private fun JourneyHeader(
                 Text("Track every milestone with love", fontSize = 11.sp, color = Color(0xFFAA8877))
             }
 
-            // Age chip
             Row(
                 verticalAlignment = Alignment.CenterVertically,
-                modifier = Modifier
+                modifier          = Modifier
                     .clip(RoundedCornerShape(20.dp))
                     .background(Color(0xFFFFD6C2))
                     .clickable { onEditAge() }
@@ -241,8 +266,7 @@ private fun JourneyHeader(
                 Icon(Icons.Default.ChildCare, null, tint = Color(0xFFD2691E), modifier = Modifier.size(14.dp))
                 Spacer(Modifier.width(4.dp))
                 Text(
-                    if (progress.childAgeMonths == 0) "Set age"
-                    else formatAge(progress.childAgeMonths),
+                    if (progress.childAgeMonths == 0) "Set age" else formatAge(progress.childAgeMonths),
                     fontSize = 11.sp, fontWeight = FontWeight.SemiBold, color = Color(0xFFD2691E)
                 )
                 Spacer(Modifier.width(3.dp))
@@ -251,7 +275,6 @@ private fun JourneyHeader(
 
             Spacer(Modifier.width(4.dp))
 
-            // Admin button
             IconButton(
                 onClick  = onAdminTapped,
                 modifier = Modifier
@@ -262,8 +285,8 @@ private fun JourneyHeader(
                 Icon(
                     Icons.Default.AdminPanelSettings,
                     contentDescription = "Admin Panel",
-                    tint     = Color(0xFF1565C0),
-                    modifier = Modifier.size(20.dp)
+                    tint               = Color(0xFF1565C0),
+                    modifier           = Modifier.size(20.dp)
                 )
             }
         }
@@ -338,9 +361,13 @@ private fun FilterRow(
 private fun LoadingView() {
     Box(Modifier.fillMaxSize(), Alignment.Center) {
         Column(horizontalAlignment = Alignment.CenterHorizontally) {
-            CircularProgressIndicator(color = Color(0xFFFF8B94), strokeWidth = 3.dp, modifier = Modifier.size(52.dp))
+            CircularProgressIndicator(
+                color       = Color(0xFFFF8B94),
+                strokeWidth = 3.dp,
+                modifier    = Modifier.size(52.dp)
+            )
             Spacer(Modifier.height(16.dp))
-            Text("Loading all milestones from datasets…", fontSize = 14.sp, color = Color(0xFFAA8877))
+            Text("Loading milestones…", fontSize = 14.sp, color = Color(0xFFAA8877))
             Spacer(Modifier.height(4.dp))
             Text("This may take a moment on first launch", fontSize = 11.sp, color = Color(0xFF9E9E9E))
         }
@@ -356,13 +383,11 @@ private fun ErrorView(message: String, onRetry: () -> Unit) {
             Text("Couldn't load data", fontSize = 16.sp, fontWeight = FontWeight.SemiBold, color = Color(0xFF2D1B0E))
             Spacer(Modifier.height(8.dp))
             Text(message, fontSize = 12.sp, color = Color(0xFFAA8877), textAlign = TextAlign.Center)
-            Spacer(Modifier.height(8.dp))
-            Text(
-                "Make sure CSV files are in:\napp/src/main/assets/datasets/",
-                fontSize = 11.sp, color = Color(0xFF9E9E9E), textAlign = TextAlign.Center
-            )
             Spacer(Modifier.height(16.dp))
-            Button(onClick = onRetry, colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF1565C0))) {
+            Button(
+                onClick = onRetry,
+                colors  = ButtonDefaults.buttonColors(containerColor = Color(0xFF1565C0))
+            ) {
                 Icon(Icons.Default.Refresh, null, modifier = Modifier.size(16.dp), tint = Color.White)
                 Spacer(Modifier.width(6.dp))
                 Text("Retry", color = Color.White)
@@ -377,7 +402,12 @@ private fun EmptyView() {
         Column(horizontalAlignment = Alignment.CenterHorizontally) {
             Text("🔍", fontSize = 40.sp)
             Spacer(Modifier.height(10.dp))
-            Text("No milestones match this filter", fontSize = 14.sp, color = Color(0xFF8B6B55), textAlign = TextAlign.Center)
+            Text(
+                "No milestones match this filter",
+                fontSize  = 14.sp,
+                color     = Color(0xFF8B6B55),
+                textAlign = TextAlign.Center
+            )
         }
     }
 }
@@ -399,24 +429,38 @@ private fun AgeDialog(
         onDismissRequest = onDismiss,
         containerColor   = Color.White,
         shape            = RoundedCornerShape(20.dp),
-        title = { Text("Your child's profile", fontWeight = FontWeight.Bold) },
+        title            = { Text("Your child's profile", fontWeight = FontWeight.Bold) },
         text = {
             Column {
                 OutlinedTextField(
-                    value = nameInput, onValueChange = { nameInput = it },
-                    label = { Text("Child's name") }, singleLine = true,
-                    modifier = Modifier.fillMaxWidth(), shape = RoundedCornerShape(10.dp)
+                    value         = nameInput,
+                    onValueChange = { nameInput = it },
+                    label         = { Text("Child's name") },
+                    singleLine    = true,
+                    modifier      = Modifier.fillMaxWidth(),
+                    shape         = RoundedCornerShape(10.dp)
                 )
                 Spacer(Modifier.height(16.dp))
-                Text(formatAge(months), fontSize = 24.sp, fontWeight = FontWeight.ExtraBold,
-                    color = Color(0xFF1565C0), modifier = Modifier.fillMaxWidth(), textAlign = TextAlign.Center)
-                Text("Past milestones auto-complete", fontSize = 12.sp, color = Color(0xFF888888),
-                    modifier = Modifier.fillMaxWidth(), textAlign = TextAlign.Center)
+                Text(
+                    formatAge(months), fontSize = 24.sp, fontWeight = FontWeight.ExtraBold,
+                    color    = Color(0xFF1565C0),
+                    modifier = Modifier.fillMaxWidth(), textAlign = TextAlign.Center
+                )
+                Text(
+                    "Past milestones auto-complete", fontSize = 12.sp, color = Color(0xFF888888),
+                    modifier = Modifier.fillMaxWidth(), textAlign = TextAlign.Center
+                )
                 Spacer(Modifier.height(8.dp))
                 Slider(
-                    value = sliderVal, onValueChange = { sliderVal = it },
-                    valueRange = 0f..144f, steps = 143,
-                    colors = SliderDefaults.colors(thumbColor = Color(0xFF1565C0), activeTrackColor = Color(0xFF1565C0), inactiveTrackColor = Color(0xFFBBDEFB))
+                    value         = sliderVal,
+                    onValueChange = { sliderVal = it },
+                    valueRange    = 0f..144f,
+                    steps         = 143,
+                    colors        = SliderDefaults.colors(
+                        thumbColor         = Color(0xFF1565C0),
+                        activeTrackColor   = Color(0xFF1565C0),
+                        inactiveTrackColor = Color(0xFFBBDEFB)
+                    )
                 )
                 Row(Modifier.fillMaxWidth(), Arrangement.SpaceBetween) {
                     Text("Newborn", fontSize = 10.sp, color = Color(0xFF9E9E9E))
@@ -425,8 +469,9 @@ private fun AgeDialog(
             }
         },
         confirmButton = {
-            Button(onClick = { onConfirm(nameInput.trim(), months) },
-                colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF1565C0))
+            Button(
+                onClick = { onConfirm(nameInput.trim(), months) },
+                colors  = ButtonDefaults.buttonColors(containerColor = Color(0xFF1565C0))
             ) { Text("Save", color = Color.White) }
         },
         dismissButton = { TextButton(onClick = onDismiss) { Text("Cancel") } }
