@@ -3,7 +3,7 @@ package com.example.babyparenting.data.repository
 import android.content.Context
 import android.content.SharedPreferences
 import com.example.babyparenting.data.local.AdminMilestoneStore
-import com.example.babyparenting.data.local.DatasetLoader
+import com.example.babyparenting.data.local.LazyDatasetLoader
 import com.example.babyparenting.data.model.AgeGroup
 import com.example.babyparenting.data.model.DatasetSource
 import com.example.babyparenting.data.model.JourneyProgress
@@ -14,16 +14,20 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 
+/**
+ * Single source of truth. Lazy loads one age group at a time.
+ * markComplete is ONE-WAY — completed milestones cannot be un-completed.
+ */
 class MilestoneRepository(private val context: Context) {
 
     private val prefs: SharedPreferences =
         context.getSharedPreferences("journey_progress", Context.MODE_PRIVATE)
     private val gson       = Gson()
-    private val loader     = DatasetLoader(context)
+    private val loader     = LazyDatasetLoader(context)
     private val adminStore = AdminMilestoneStore(context)
 
-    private var csvMilestones: List<Milestone> = emptyList()
-    private var allMilestones: List<Milestone> = emptyList()
+    private var loadedMilestones: MutableList<Milestone> = mutableListOf()
+    private var highestLoadedGroup: Int = 0
 
     private val _milestones = MutableStateFlow<List<Milestone>>(emptyList())
     private val _ageGroups  = MutableStateFlow<List<AgeGroup>>(emptyList())
@@ -33,47 +37,76 @@ class MilestoneRepository(private val context: Context) {
 
     val milestones: StateFlow<List<Milestone>> = _milestones.asStateFlow()
     val ageGroups:  StateFlow<List<AgeGroup>>  = _ageGroups.asStateFlow()
-    val progress:   StateFlow<JourneyProgress> = _progress.asStateFlow()
-    val isLoading:  StateFlow<Boolean>          = _isLoading.asStateFlow()
-    val error:      StateFlow<String?>          = _error.asStateFlow()
+    val progress:   StateFlow<JourneyProgress>  = _progress.asStateFlow()
+    val isLoading:  StateFlow<Boolean>           = _isLoading.asStateFlow()
+    val error:      StateFlow<String?>           = _error.asStateFlow()
 
     // ── Load ──────────────────────────────────────────────────────────────────
 
-    suspend fun loadAll() {
+    suspend fun initialLoad() {
         try {
             _isLoading.value = true
             _error.value     = null
             _ageGroups.value = loader.getAgeGroups()
-            csvMilestones    = loader.loadInitialMilestones()
+
+            val childAge   = getChildAgeMonths()
+            val startGroup = loader.startingGroupId(childAge)
+
+            for (groupId in 1..startGroup) {
+                loadGroupIfNeeded(groupId)
+            }
             mergeAndEmit()
         } catch (e: Exception) {
-            _error.value = "Failed to load datasets: ${e.localizedMessage}"
+            _error.value = "Failed to load: ${e.localizedMessage}"
         } finally {
             _isLoading.value = false
         }
     }
 
-    fun refreshAdminMilestones() = mergeAndEmit()
+    suspend fun loadNextGroupIfNeeded(nextGroupId: Int) {
+        if (nextGroupId > loader.totalGroups()) return
+        if (nextGroupId <= highestLoadedGroup) return
+        try {
+            _isLoading.value = true
+            loadGroupIfNeeded(nextGroupId)
+            mergeAndEmit()
+        } catch (e: Exception) {
+            // silent fail
+        } finally {
+            _isLoading.value = false
+        }
+    }
 
-    // ── Completion ────────────────────────────────────────────────────────────
+    // ── ONE-WAY completion ────────────────────────────────────────────────────
 
-    fun toggleCompletion(id: String) {
+    /**
+     * Mark a milestone as complete. PERMANENT — cannot be reversed.
+     * Once a milestone is in completedIds, it stays there forever.
+     */
+    fun markComplete(id: String) {
         val ids = getCompletedIds().toMutableSet()
-        if (id in ids) ids.remove(id) else ids.add(id)
+        if (id in ids) return   // already complete — do nothing
+        ids.add(id)
         saveCompletedIds(ids)
-        // ✅ .toList() — forces new list reference so StateFlow triggers collect
-        allMilestones     = allMilestones.map { it.copy(isCompleted = it.id in ids) }.toList()
-        _milestones.value = allMilestones
+        loadedMilestones = loadedMilestones.map {
+            it.copy(isCompleted = it.id in ids)
+        }.toMutableList()
+        _milestones.value = loadedMilestones.toList()
         _progress.value   = buildProgress()
     }
+
+    // ── Child profile ─────────────────────────────────────────────────────────
 
     fun setChildAge(months: Int) {
         prefs.edit().putInt(KEY_AGE, months).apply()
         val ids = getCompletedIds().toMutableSet()
-        allMilestones.filter { it.ageMonths <= months }.forEach { ids.add(it.id) }
+        // Auto-complete past milestones
+        loadedMilestones.filter { it.ageMonths <= months }.forEach { ids.add(it.id) }
         saveCompletedIds(ids)
-        allMilestones     = allMilestones.map { it.copy(isCompleted = it.id in ids) }.toList()
-        _milestones.value = allMilestones
+        loadedMilestones = loadedMilestones.map {
+            it.copy(isCompleted = it.id in ids)
+        }.toMutableList()
+        _milestones.value = loadedMilestones.toList()
         _progress.value   = buildProgress()
     }
 
@@ -85,11 +118,21 @@ class MilestoneRepository(private val context: Context) {
     fun getChildAgeMonths(): Int = prefs.getInt(KEY_AGE, 0)
     fun getChildName(): String   = prefs.getString(KEY_NAME, "") ?: ""
 
+    fun refreshAdminMilestones() = mergeAndEmit()
+
     // ── Private ───────────────────────────────────────────────────────────────
+
+    private suspend fun loadGroupIfNeeded(groupId: Int) {
+        if (groupId <= highestLoadedGroup) return
+        val newMs = loader.loadForGroup(groupId)
+        loadedMilestones.addAll(newMs)
+        highestLoadedGroup = groupId
+    }
 
     private fun mergeAndEmit() {
         val completed = getCompletedIds()
-        val adminMs   = adminStore.getAll().map { am ->
+
+        val adminMs = adminStore.getAll().map { am ->
             Milestone(
                 id           = am.id,
                 title        = am.title,
@@ -107,17 +150,21 @@ class MilestoneRepository(private val context: Context) {
             )
         }
 
-        allMilestones = (csvMilestones.map { it.copy(isCompleted = it.id in completed) } + adminMs)
-            .sortedWith(compareBy({ it.ageMonths }, { it.source.ordinal }))
-            .toList()  // ✅ fresh list
+        loadedMilestones = loadedMilestones.map {
+            it.copy(isCompleted = it.id in completed)
+        }.toMutableList()
 
-        _milestones.value = allMilestones
+        val merged = (loadedMilestones + adminMs)
+            .sortedWith(compareBy({ it.ageMonths }, { it.source.ordinal }))
+            .toList()
+
+        _milestones.value = merged
         _progress.value   = buildProgress()
     }
 
     private fun buildProgress() = JourneyProgress(
-        totalMilestones     = allMilestones.size,
-        completedMilestones = allMilestones.count { it.isCompleted },
+        totalMilestones     = loadedMilestones.size,
+        completedMilestones = loadedMilestones.count { it.isCompleted },
         childAgeMonths      = getChildAgeMonths(),
         childName           = getChildName()
     )

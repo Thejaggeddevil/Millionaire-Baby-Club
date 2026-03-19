@@ -1,6 +1,5 @@
 package com.example.babyparenting
 
-import android.content.Context
 import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
@@ -17,15 +16,15 @@ class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
-
-        val prefs       = getSharedPreferences("journey_progress", Context.MODE_PRIVATE)
-        val isReturning = prefs.getString("child_name", "")?.isNotBlank() == true
-        val start       = if (isReturning) Routes.JOURNEY else Routes.ONBOARDING
-
         setContent {
             BabyParentingTheme {
-                Surface(Modifier.fillMaxSize(), color = MaterialTheme.colorScheme.background) {
-                    AppNavigation(startDestination = start)
+                Surface(
+                    modifier = Modifier.fillMaxSize(),
+                    color    = MaterialTheme.colorScheme.background
+                ) {
+                    // Always start at Login screen
+                    // LoginScreen handles routing to Onboarding or Journey
+                    AppNavigation(startDestination = Routes.LOGIN)
                 }
             }
         }

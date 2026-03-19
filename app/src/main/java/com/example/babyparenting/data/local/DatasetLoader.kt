@@ -10,36 +10,24 @@ import java.io.BufferedReader
 import java.io.InputStreamReader
 
 /**
- * Reads all 15 CSV files from assets/datasets/ at runtime.
- * Nothing hardcoded — every milestone comes from the CSVs.
  *
- * ── SETUP ────────────────────────────────────────────────────────────────────
- * Copy all 15 CSV files into:  app/src/main/assets/datasets/
- *
- * Expected filenames:
- *   0_24_month_data.csv          0_24_data_parent.csv
- *   24_60_month_data.csv         25_60_data_parent.csv
- *   2_5_academics_data.csv       5_12_year_data.csv
- *   5_12_year_data_parent.csv    language_5_12_data.csv
- *   maths_5_12_data.csv          science_5_12_data.csv
- *   social_5_12_data.csv         civics_evs_5_12_data.csv
- *   cs_5_12_data.csv             foreign_5_12_data.csv
- *   good_bad_touch_data.csv
- * ─────────────────────────────────────────────────────────────────────────────
+ * Age Group → CSV mapping:
+ *   Group 1–6  (0–24 mo)   : 0_24_month_data.csv + 0_24_data_parent.csv
+ *   Group 7–9  (24–60 mo)  : 24_60_month_data.csv + 25_60_data_parent.csv
+ *                            + 2_5_academics_data.csv
+ *   Group 10   (4–5 yr)    : same as 7-9 (includes academics)
+ *   Group 11   (5–7 yr)    : 5_12_year_data.csv + 5_12_year_data_parent.csv
+ *                            + language_5_12_data.csv + maths_5_12_data.csv
+ *                            + good_bad_touch_data.csv
+ *   Group 12   (7–9 yr)    : science + social + civics + cs + foreign
+ *   Group 13+  (9–12 yr)   : all remaining 5-12 datasets
+
  */
-class DatasetLoader(private val context: Context) {
+class LazyDatasetLoader(private val context: Context) {
 
-    suspend fun loadInitialMilestones(): List<Milestone> = withContext(Dispatchers.IO) {
-        val list = mutableListOf<Milestone>()
-
-        // 🔥 ONLY LOAD FIRST 2 FILES (for testing)
-        list += load0to24Child()
-        list += load0to24Parent()
-
-        android.util.Log.d("CSV_DEBUG", "Loaded initial: ${list.size}")
-
-        list
-    }
+    // In-memory cache — already-loaded groups ka data yahan rahta hai
+    // Dobara CSV read nahi hoga agar group already loaded hai
+    private val loadedGroups = mutableMapOf<Int, List<Milestone>>()
 
     fun getAgeGroups(): List<AgeGroup> = listOf(
         AgeGroup(1,  "0 – 3 Months",   "Sensory foundation, feeding & safe sleep",        0,   3,   0xFFFF8B94),
@@ -57,6 +45,371 @@ class DatasetLoader(private val context: Context) {
         AgeGroup(13, "11 – 12 Years",  "Pre-teen independence, coding & digital ethics",  132, 144, 0xFF26C6DA)
     )
 
+    /**
+     * Load milestones for ONE specific age group.
+     * Cache mein already hai toh CSV dobara nahi padhega.
+     */
+    suspend fun loadForGroup(groupId: Int): List<Milestone> =
+        withContext(Dispatchers.IO) {
+            loadedGroups.getOrPut(groupId) {
+                when (groupId) {
+                    in 1..6  -> loadGroup_0_24(groupId)
+                    in 7..9  -> loadGroup_24_60(groupId)
+                    10       -> loadGroup_5_7(groupId)
+                    11       -> loadGroup_7_9(groupId)
+                    else     -> loadGroup_9_12(groupId)
+                }
+            }
+        }
+
+    /**
+     * Age group ke liye starting ageMonths return karta hai.
+     * Child ki age se starting group calculate karne ke liye.
+     */
+    fun startingGroupId(childAgeMonths: Int): Int = when (childAgeMonths) {
+        in 0..2    -> 1
+        in 3..5    -> 2
+        in 6..8    -> 3
+        in 9..11   -> 4
+        in 12..17  -> 5
+        in 18..23  -> 6
+        in 24..35  -> 7
+        in 36..47  -> 8
+        in 48..59  -> 9
+        in 60..83  -> 10
+        in 84..107 -> 11
+        in 108..131-> 12
+        else       -> 13
+    }
+
+    fun totalGroups(): Int = 13
+
+    // ── Group loaders ─────────────────────────────────────────────────────────
+
+    /** Groups 1–6: 0–24 months — loads 2 CSVs only */
+    private fun loadGroup_0_24(groupId: Int): List<Milestone> {
+        val (start, end) = groupMonthRange(groupId)
+        val child  = openCsv("0_24_month_data.csv")
+            .filter { row ->
+                val age = parseAgeMonth(row.col("age_month"))
+                age in start..end
+            }
+            .mapIndexed { idx, row ->
+                val age    = parseAgeMonth(row.col("age_month"))
+                val domain = row.col("domain")
+                val skill  = row.col("skill")
+                Milestone(
+                    id          = "c0_24_g${groupId}_$idx",
+                    title       = skill.take(50),
+                    subtitle    = row.col("development_goal").take(70),
+                    domain      = domain,
+                    ageMonths   = age,
+                    ageRange    = "$age mo",
+                    ageGroupId  = groupId,
+                    source      = DatasetSource.CHILD_0_24,
+                    apiQuery    = "$domain $skill $age months",
+                    iconEmoji   = emoji0to24(domain),
+                    accentColor = DatasetSource.CHILD_0_24.colorHex
+                )
+            }
+
+        val parent = openCsv("0_24_data_parent.csv")
+            .filter { row ->
+                val age = parseAgeMonth(row.col("age_month"))
+                age in start..end
+            }
+            .mapIndexed { idx, row ->
+                val age    = parseAgeMonth(row.col("age_month"))
+                val domain = row.col("domain")
+                val skill  = row.col("skill_name")
+                Milestone(
+                    id          = "p0_24_g${groupId}_$idx",
+                    title       = skill.take(50),
+                    subtitle    = row.col("parent_learning_goal").take(70),
+                    domain      = domain,
+                    ageMonths   = age,
+                    ageRange    = "$age mo",
+                    ageGroupId  = groupId,
+                    source      = DatasetSource.PARENT_0_24,
+                    apiQuery    = "$domain $skill $age months parent",
+                    iconEmoji   = emojiParent(domain),
+                    accentColor = DatasetSource.PARENT_0_24.colorHex
+                )
+            }
+
+        return (child + parent).sortedBy { it.ageMonths }
+    }
+
+    /** Groups 7–9: 24–60 months — loads 3 CSVs */
+    private fun loadGroup_24_60(groupId: Int): List<Milestone> {
+        val (startMo, endMo) = groupMonthRange(groupId)
+
+        val child = openCsv("24_60_month_data.csv")
+            .filter { row ->
+                val age = parseAgeMonth(row.col("age_month_range"))
+                age in startMo..endMo
+            }
+            .mapIndexed { idx, row ->
+                val ageRaw = row.col("age_month_range")
+                val age    = parseAgeMonth(ageRaw)
+                val domain = row.col("domain")
+                val act    = row.col("activity")
+                Milestone(
+                    id          = "c24_60_g${groupId}_$idx",
+                    title       = act.take(50),
+                    subtitle    = row.col("goal").take(70),
+                    domain      = domain,
+                    ageMonths   = age,
+                    ageRange    = "$ageRaw mo",
+                    ageGroupId  = groupId,
+                    source      = DatasetSource.CHILD_24_60,
+                    apiQuery    = "$domain $act $ageRaw months",
+                    iconEmoji   = emoji24to60(domain),
+                    accentColor = DatasetSource.CHILD_24_60.colorHex
+                )
+            }
+
+        val parent = openCsv("25_60_data_parent.csv")
+            .filter { row ->
+                val age = parseAgeMonth(row.col("age_month"))
+                age in startMo..endMo
+            }
+            .mapIndexed { idx, row ->
+                val ageRaw = row.col("age_month")
+                val age    = parseAgeMonth(ageRaw)
+                val domain = row.col("domain")
+                val skill  = row.col("skill_name")
+                Milestone(
+                    id          = "p24_60_g${groupId}_$idx",
+                    title       = skill.take(50),
+                    subtitle    = row.col("parent_learning_goal").take(70),
+                    domain      = domain,
+                    ageMonths   = age,
+                    ageRange    = "$ageRaw mo",
+                    ageGroupId  = groupId,
+                    source      = DatasetSource.PARENT_24_60,
+                    apiQuery    = "$domain $skill $ageRaw months parent",
+                    iconEmoji   = emojiParent(domain),
+                    accentColor = DatasetSource.PARENT_24_60.colorHex
+                )
+            }
+
+        val startYr = startMo / 12.0
+        val endYr   = endMo   / 12.0
+        val acad = openCsv("2_5_academics_data.csv")
+            .filter { row ->
+                val yr = parseAgeYearToMonths(row.col("age_range")) / 12.0
+                yr in startYr..endYr
+            }
+            .mapIndexed { idx, row ->
+                val ageRaw = row.col("age_range")
+                val age    = parseAgeYearToMonths(ageRaw)
+                val domain = row.col("domain")
+                val act    = row.col("activity")
+                Milestone(
+                    id          = "acad_g${groupId}_$idx",
+                    title       = act.take(50),
+                    subtitle    = row.col("goal").take(70),
+                    domain      = domain,
+                    ageMonths   = age,
+                    ageRange    = "$ageRaw yr",
+                    ageGroupId  = groupId,
+                    source      = DatasetSource.PRE_ACADEMICS,
+                    apiQuery    = "$domain $act $ageRaw years preschool",
+                    iconEmoji   = emojiAcademics(domain),
+                    accentColor = DatasetSource.PRE_ACADEMICS.colorHex
+                )
+            }
+
+        return (child + parent + acad).sortedBy { it.ageMonths }
+    }
+
+    /** Group 10: 5–7 years */
+    private fun loadGroup_5_7(groupId: Int): List<Milestone> {
+        val child = loadSubjectFilter("5_12_year_data.csv", groupId, DatasetSource.CHILD_5_12, "🏃",
+            ageKey = "age_range", ageParser = ::parseAgeYearToMonths, minMo = 60, maxMo = 84)
+        val parent = loadParentFilter("5_12_year_data_parent.csv", groupId, DatasetSource.PARENT_5_12,
+            ageKey = "age_year", minMo = 60, maxMo = 84)
+        val lang = loadSubjectFilter("language_5_12_data.csv", groupId, DatasetSource.LANGUAGE, "🗣️",
+            ageKey = "age", ageParser = { (it.toDoubleOrNull() ?: 5.0).times(12).toInt() }, minMo = 60, maxMo = 84)
+        val maths = loadSubjectDataset("maths_5_12_data.csv", groupId, DatasetSource.MATHEMATICS, "🔢", "5")
+        val safety = loadSafetyDataset(groupId, "6")
+        return (child + parent + lang + maths + safety).sortedBy { it.ageMonths }
+    }
+
+    /** Group 11: 7–9 years */
+    private fun loadGroup_7_9(groupId: Int): List<Milestone> {
+        val child  = loadSubjectFilter("5_12_year_data.csv", groupId, DatasetSource.CHILD_5_12, "🏃",
+            ageKey = "age_range", ageParser = ::parseAgeYearToMonths, minMo = 84, maxMo = 108)
+        val parent = loadParentFilter("5_12_year_data_parent.csv", groupId, DatasetSource.PARENT_5_12,
+            ageKey = "age_year", minMo = 84, maxMo = 108)
+        val science = loadSubjectDataset("science_5_12_data.csv", groupId, DatasetSource.SCIENCE, "🔬", "8")
+        val social  = loadSubjectDataset("social_5_12_data.csv", groupId, DatasetSource.SOCIAL_STUDIES, "🏘️", "8")
+        val civics  = loadSubjectDataset("civics_evs_5_12_data.csv", groupId, DatasetSource.CIVICS, "🏛️", "8")
+        return (child + parent + science + social + civics).sortedBy { it.ageMonths }
+    }
+
+    /** Groups 12–13: 9–12 years */
+    private fun loadGroup_9_12(groupId: Int): List<Milestone> {
+        val child  = loadSubjectFilter("5_12_year_data.csv", groupId, DatasetSource.CHILD_5_12, "🏃",
+            ageKey = "age_range", ageParser = ::parseAgeYearToMonths, minMo = 108, maxMo = 144)
+        val parent = loadParentFilter("5_12_year_data_parent.csv", groupId, DatasetSource.PARENT_5_12,
+            ageKey = "age_year", minMo = 108, maxMo = 144)
+        val cs      = loadSubjectDataset("cs_5_12_data.csv", groupId, DatasetSource.COMPUTER_SCIENCE, "💻", "11")
+        val foreign = loadForeignDataset(groupId, "11")
+        val safety  = loadSafetyDataset(groupId, "9")
+        val lang    = loadSubjectFilter("language_5_12_data.csv", groupId, DatasetSource.LANGUAGE, "🗣️",
+            ageKey = "age", ageParser = { (it.toDoubleOrNull() ?: 9.0).times(12).toInt() }, minMo = 108, maxMo = 144)
+        return (child + parent + cs + foreign + safety + lang).sortedBy { it.ageMonths }
+    }
+
+    // ── Generic loaders ───────────────────────────────────────────────────────
+
+    private fun loadSubjectFilter(
+        file: String,
+        groupId: Int,
+        source: DatasetSource,
+        emoji: String,
+        ageKey: String,
+        ageParser: (String) -> Int,
+        minMo: Int,
+        maxMo: Int
+    ): List<Milestone> =
+        openCsv(file)
+            .filter { row ->
+                val mo = ageParser(row.col(ageKey))
+                mo in minMo..maxMo
+            }
+            .mapIndexed { idx, row ->
+                val ageRaw = row.col(ageKey)
+                val age    = ageParser(ageRaw)
+                val domain = row.col("domain", "subject", "subdomain")
+                val skill  = row.col("skill_name", "activity", "skill", "topic")
+                Milestone(
+                    id          = "${source.name}_g${groupId}_$idx",
+                    title       = skill.take(50),
+                    subtitle    = row.col("development_goal", "goal", "learning_goal", "parent_learning_goal").take(70),
+                    domain      = domain,
+                    ageMonths   = age,
+                    ageRange    = "$ageRaw",
+                    ageGroupId  = groupId,
+                    source      = source,
+                    apiQuery    = "$domain $skill $ageRaw years",
+                    iconEmoji   = emoji,
+                    accentColor = source.colorHex
+                )
+            }
+
+    private fun loadParentFilter(
+        file: String,
+        groupId: Int,
+        source: DatasetSource,
+        ageKey: String,
+        minMo: Int,
+        maxMo: Int
+    ): List<Milestone> =
+        openCsv(file)
+            .filter { row ->
+                val mo = parseAgeYearToMonths(row.col(ageKey))
+                mo in minMo..maxMo
+            }
+            .mapIndexed { idx, row ->
+                val ageRaw = row.col(ageKey)
+                val age    = parseAgeYearToMonths(ageRaw)
+                val domain = row.col("domain")
+                val skill  = row.col("skill_name")
+                Milestone(
+                    id          = "${source.name}_g${groupId}_$idx",
+                    title       = skill.take(50),
+                    subtitle    = row.col("parent_learning_goal").take(70),
+                    domain      = domain,
+                    ageMonths   = age,
+                    ageRange    = "$ageRaw yr",
+                    ageGroupId  = groupId,
+                    source      = source,
+                    apiQuery    = "$domain $skill $ageRaw years parent",
+                    iconEmoji   = emojiParent(domain),
+                    accentColor = source.colorHex
+                )
+            }
+
+    /** Subject dataset (maths/science/social/civics/cs) — ageGroup prefix se filter */
+    private fun loadSubjectDataset(
+        file: String,
+        groupId: Int,
+        source: DatasetSource,
+        emoji: String,
+        agePrefix: String  // e.g. "5" matches "5-7", "5–7"
+    ): List<Milestone> =
+        openCsv(file)
+            .filter { row -> row.col("age_group").contains(agePrefix) }
+            .mapIndexed { idx, row ->
+                val ageRaw  = row.col("age_group")
+                val subject = row.col("subject")
+                val topic   = row.col("topic")
+                Milestone(
+                    id          = "${source.name}_g${groupId}_$idx",
+                    title       = topic.take(50).ifBlank { subject.take(50) },
+                    subtitle    = row.col("input").take(70).ifBlank { topic.take(70) },
+                    domain      = subject,
+                    ageMonths   = ageRawToMonths(ageRaw),
+                    ageRange    = "$ageRaw yr",
+                    ageGroupId  = groupId,
+                    source      = source,
+                    apiQuery    = "$subject $topic $ageRaw years",
+                    iconEmoji   = emoji,
+                    accentColor = source.colorHex
+                )
+            }
+
+    private fun loadForeignDataset(groupId: Int, agePrefix: String): List<Milestone> =
+        openCsv("foreign_5_12_data.csv")
+            .filter { row -> row.col("age_group").contains(agePrefix) }
+            .mapIndexed { idx, row ->
+                val ageRaw = row.col("age_group")
+                val lang   = row.col("language")
+                val topic  = row.col("topic")
+                Milestone(
+                    id          = "foreign_g${groupId}_$idx",
+                    title       = "$lang: ${topic.take(35)}",
+                    subtitle    = row.col("input").take(70),
+                    domain      = "Foreign Language",
+                    ageMonths   = ageRawToMonths(ageRaw),
+                    ageRange    = "$ageRaw yr",
+                    ageGroupId  = groupId,
+                    source      = DatasetSource.FOREIGN_LANGUAGE,
+                    apiQuery    = "Foreign language $lang $topic $ageRaw years",
+                    iconEmoji   = emojiLang(lang),
+                    accentColor = DatasetSource.FOREIGN_LANGUAGE.colorHex
+                )
+            }
+
+    private fun loadSafetyDataset(groupId: Int, agePrefix: String): List<Milestone> =
+        openCsv("good_bad_touch_data.csv")
+            .filter { row -> row.col("age_group").contains(agePrefix) }
+            .mapIndexed { idx, row ->
+                val ageRaw = row.col("age_group")
+                val env    = row.col("environment")
+                val topic  = row.col("topic")
+                Milestone(
+                    id          = "safety_g${groupId}_$idx",
+                    title       = topic.take(50),
+                    subtitle    = row.col("learning_goal").take(70),
+                    domain      = "Safety",
+                    ageMonths   = when {
+                        ageRaw.contains("4") -> 48
+                        ageRaw.contains("6") -> 72
+                        else                 -> 108
+                    },
+                    ageRange    = "$ageRaw yr",
+                    ageGroupId  = groupId,
+                    source      = DatasetSource.SAFETY,
+                    apiQuery    = "child safety $topic $env $ageRaw years",
+                    iconEmoji   = emojiSafety(env),
+                    accentColor = DatasetSource.SAFETY.colorHex
+                )
+            }
+
     // ── CSV helpers ───────────────────────────────────────────────────────────
 
     private fun openCsv(filename: String): List<Map<String, String>> {
@@ -72,7 +425,6 @@ class DatasetLoader(private val context: Context) {
                 headers.zip(values).toMap()
             }
         } catch (e: Exception) {
-            android.util.Log.e("CSV_ERROR", "Error loading $filename: ${e.message}")
             emptyList()
         }
     }
@@ -99,10 +451,8 @@ class DatasetLoader(private val context: Context) {
         return result
     }
 
-    /**
-     * FIX: renamed to col() instead of get() to avoid shadowing Map.get()
-     * which caused 175 "type mismatch String? vs String" compile errors.
-     */
+    // FIX: col() instead of get() — avoids shadowing Map.get() which caused
+    // 175 "String? vs String" type mismatch errors in earlier version
     private fun Map<String, String>.col(vararg keys: String): String {
         for (k in keys) {
             val v = (this as Map<*, *>)[k]
@@ -111,30 +461,22 @@ class DatasetLoader(private val context: Context) {
         return ""
     }
 
-    private fun parseList(raw: String): List<String> {
-        if (raw.isBlank()) return emptyList()
-        return raw.trim()
-            .removePrefix("[").removeSuffix("]")
-            .replace("\"", "")
-            .split(",")
-            .map { it.trim().removePrefix("'").removeSuffix("'").trim() }
-            .filter { it.isNotBlank() }
-    }
+    // ── Age helpers ───────────────────────────────────────────────────────────
 
-    private fun ageGroupForMonth(months: Int): Int = when (months) {
-        in 0..2    -> 1
-        in 3..5    -> 2
-        in 6..8    -> 3
-        in 9..11   -> 4
-        in 12..17  -> 5
-        in 18..23  -> 6
-        in 24..35  -> 7
-        in 36..47  -> 8
-        in 48..59  -> 9
-        in 60..83  -> 10
-        in 84..107 -> 11
-        in 108..131-> 12
-        else       -> 13
+    private fun groupMonthRange(groupId: Int): Pair<Int, Int> = when (groupId) {
+        1  -> 0  to 2
+        2  -> 3  to 5
+        3  -> 6  to 8
+        4  -> 9  to 11
+        5  -> 12 to 17
+        6  -> 18 to 23
+        7  -> 24 to 35
+        8  -> 36 to 47
+        9  -> 48 to 59
+        10 -> 60 to 83
+        11 -> 84 to 107
+        12 -> 108 to 131
+        else -> 132 to 144
     }
 
     private fun parseAgeMonth(raw: String): Int {
@@ -165,271 +507,6 @@ class DatasetLoader(private val context: Context) {
         raw.contains("5")  -> 60
         else               -> 60
     }
-
-    private fun buildQuery(domain: String, skill: String, age: String) =
-        "$domain $skill $age".trim()
-
-    // ── 0_24_month_data.csv ───────────────────────────────────────────────────
-
-    private fun load0to24Child(): List<Milestone> =
-        openCsv("0_24_month_data.csv").take(200) .mapIndexed { idx, row ->
-            val age    = parseAgeMonth(row.col("age_month"))
-            val domain = row.col("domain")
-            val skill  = row.col("skill")
-            Milestone(
-                id          = "c0_24_$idx",
-                title       = skill.take(50),
-                subtitle    = row.col("development_goal").take(70),
-                domain      = domain,
-                ageMonths   = age,
-                ageRange    = "$age mo",
-                ageGroupId  = ageGroupForMonth(age),
-                source      = DatasetSource.CHILD_0_24,
-                apiQuery    = buildQuery(domain, skill, "$age months"),
-                iconEmoji   = emoji0to24(domain),
-                accentColor = DatasetSource.CHILD_0_24.colorHex
-            )
-        }
-
-    // ── 0_24_data_parent.csv ──────────────────────────────────────────────────
-
-    private fun load0to24Parent(): List<Milestone> =
-        openCsv("0_24_data_parent.csv").take(200).mapIndexed { idx, row ->
-            val age    = parseAgeMonth(row.col("age_month"))
-            val domain = row.col("domain")
-            val skill  = row.col("skill_name")
-            Milestone(
-                id          = "p0_24_$idx",
-                title       = skill.take(50),
-                subtitle    = row.col("parent_learning_goal").take(70),
-                domain      = domain,
-                ageMonths   = age,
-                ageRange    = "$age mo",
-                ageGroupId  = ageGroupForMonth(age),
-                source      = DatasetSource.PARENT_0_24,
-                apiQuery    = buildQuery(domain, skill, "$age months parent"),
-                iconEmoji   = emojiParent(domain),
-                accentColor = DatasetSource.PARENT_0_24.colorHex
-            )
-        }
-
-    // ── 24_60_month_data.csv ──────────────────────────────────────────────────
-
-    private fun load24to60Child(): List<Milestone> =
-        openCsv("24_60_month_data.csv").take(200).mapIndexed { idx, row ->
-            val ageRaw = row.col("age_month_range")
-            val age    = parseAgeMonth(ageRaw)
-            val domain = row.col("domain")
-            val act    = row.col("activity")
-            Milestone(
-                id          = "c24_60_$idx",
-                title       = act.take(50),
-                subtitle    = row.col("goal").take(70),
-                domain      = domain,
-                ageMonths   = age,
-                ageRange    = "$ageRaw mo",
-                ageGroupId  = ageGroupForMonth(age),
-                source      = DatasetSource.CHILD_24_60,
-                apiQuery    = buildQuery(domain, act, "$ageRaw months"),
-                iconEmoji   = emoji24to60(domain),
-                accentColor = DatasetSource.CHILD_24_60.colorHex
-            )
-        }
-
-    // ── 25_60_data_parent.csv ─────────────────────────────────────────────────
-
-    private fun load24to60Parent(): List<Milestone> =
-        openCsv("25_60_data_parent.csv").take(200).mapIndexed { idx, row ->
-            val ageRaw = row.col("age_month")
-            val age    = parseAgeMonth(ageRaw)
-            val domain = row.col("domain")
-            val skill  = row.col("skill_name")
-            Milestone(
-                id          = "p24_60_$idx",
-                title       = skill.take(50),
-                subtitle    = row.col("parent_learning_goal").take(70),
-                domain      = domain,
-                ageMonths   = age,
-                ageRange    = "$ageRaw mo",
-                ageGroupId  = ageGroupForMonth(age),
-                source      = DatasetSource.PARENT_24_60,
-                apiQuery    = buildQuery(domain, skill, "$ageRaw months parent"),
-                iconEmoji   = emojiParent(domain),
-                accentColor = DatasetSource.PARENT_24_60.colorHex
-            )
-        }
-
-    // ── 2_5_academics_data.csv ────────────────────────────────────────────────
-
-    private fun load2to5Academics(): List<Milestone> =
-        openCsv("2_5_academics_data.csv").take(200).mapIndexed { idx, row ->
-            val ageRaw = row.col("age_range")
-            val age    = parseAgeYearToMonths(ageRaw)
-            val domain = row.col("domain")
-            val act    = row.col("activity")
-            Milestone(
-                id          = "acad_$idx",
-                title       = act.take(50),
-                subtitle    = row.col("goal").take(70),
-                domain      = domain,
-                ageMonths   = age,
-                ageRange    = "$ageRaw yr",
-                ageGroupId  = ageGroupForMonth(age),
-                source      = DatasetSource.PRE_ACADEMICS,
-                apiQuery    = buildQuery(domain, act, "$ageRaw years"),
-                iconEmoji   = emojiAcademics(domain),
-                accentColor = DatasetSource.PRE_ACADEMICS.colorHex
-            )
-        }
-
-    // ── 5_12_year_data.csv ────────────────────────────────────────────────────
-
-    private fun load5to12Child(): List<Milestone> =
-        openCsv("5_12_year_data.csv").take(200).mapIndexed { idx, row ->
-            val ageRaw = row.col("age_range")
-            val age    = parseAgeYearToMonths(ageRaw)
-            val domain = row.col("domain")
-            val act    = row.col("activity")
-            Milestone(
-                id          = "c5_12_$idx",
-                title       = act.take(50),
-                subtitle    = row.col("goal").take(70),
-                domain      = domain,
-                ageMonths   = age,
-                ageRange    = "$ageRaw yr",
-                ageGroupId  = ageGroupForMonth(age),
-                source      = DatasetSource.CHILD_5_12,
-                apiQuery    = buildQuery(domain, act, "$ageRaw years"),
-                iconEmoji   = emoji5to12(domain),
-                accentColor = DatasetSource.CHILD_5_12.colorHex
-            )
-        }
-
-    // ── 5_12_year_data_parent.csv ─────────────────────────────────────────────
-
-    private fun load5to12Parent(): List<Milestone> =
-        openCsv("5_12_year_data_parent.csv").take(200).mapIndexed { idx, row ->
-            val ageRaw = row.col("age_year")
-            val age    = parseAgeYearToMonths(ageRaw)
-            val domain = row.col("domain")
-            val skill  = row.col("skill_name")
-            Milestone(
-                id          = "p5_12_$idx",
-                title       = skill.take(50),
-                subtitle    = row.col("parent_learning_goal").take(70),
-                domain      = domain,
-                ageMonths   = age,
-                ageRange    = "$ageRaw yr",
-                ageGroupId  = ageGroupForMonth(age),
-                source      = DatasetSource.PARENT_5_12,
-                apiQuery    = buildQuery(domain, skill, "$ageRaw years parent"),
-                iconEmoji   = emojiParent(domain),
-                accentColor = DatasetSource.PARENT_5_12.colorHex
-            )
-        }
-
-    // ── language_5_12_data.csv ────────────────────────────────────────────────
-
-    private fun loadLanguage(): List<Milestone> =
-        openCsv("language_5_12_data.csv").take(200).mapIndexed { idx, row ->
-            val ageRaw   = row.col("age")
-            val age      = (ageRaw.toDoubleOrNull() ?: 5.0).times(12).toInt()
-            val subdomain = row.col("subdomain")
-            val skillName = row.col("skill_name")
-            Milestone(
-                id          = "lang_$idx",
-                title       = skillName.take(50),
-                subtitle    = subdomain.take(70),
-                domain      = "Language & Communication",
-                ageMonths   = age,
-                ageRange    = "$ageRaw yr",
-                ageGroupId  = ageGroupForMonth(age),
-                source      = DatasetSource.LANGUAGE,
-                apiQuery    = buildQuery("Language Communication", skillName, "$ageRaw years"),
-                iconEmoji   = "🗣️",
-                accentColor = DatasetSource.LANGUAGE.colorHex
-            )
-        }
-
-    // ── Subject datasets ──────────────────────────────────────────────────────
-
-    private fun loadMaths()   = loadSubject("maths_5_12_data.csv",      DatasetSource.MATHEMATICS,      "maths",   "🔢")
-    private fun loadScience() = loadSubject("science_5_12_data.csv",    DatasetSource.SCIENCE,          "science", "🔬")
-    private fun loadSocial()  = loadSubject("social_5_12_data.csv",     DatasetSource.SOCIAL_STUDIES,   "social",  "🏘️")
-    private fun loadCivics()  = loadSubject("civics_evs_5_12_data.csv", DatasetSource.CIVICS,           "civics",  "🏛️")
-    private fun loadCS()      = loadSubject("cs_5_12_data.csv",         DatasetSource.COMPUTER_SCIENCE, "cs",      "💻")
-
-    private fun loadSubject(file: String, source: DatasetSource, prefix: String, emoji: String): List<Milestone> =
-        openCsv(file).mapIndexed { idx, row ->
-            val ageRaw  = row.col("age_group")
-            val age     = ageRawToMonths(ageRaw)
-            val subject = row.col("subject")
-            val topic   = row.col("topic")
-            Milestone(
-                id          = "${prefix}_$idx",
-                title       = topic.take(50).ifBlank { subject.take(50) },
-                subtitle    = row.col("input").take(70).ifBlank { topic.take(70) },
-                domain      = subject,
-                ageMonths   = age,
-                ageRange    = "$ageRaw yr",
-                ageGroupId  = ageGroupForMonth(age),
-                source      = source,
-                apiQuery    = buildQuery(subject, topic, "$ageRaw years"),
-                iconEmoji   = emoji,
-                accentColor = source.colorHex
-            )
-        }
-
-    // ── foreign_5_12_data.csv ─────────────────────────────────────────────────
-
-    private fun loadForeign(): List<Milestone> =
-        openCsv("foreign_5_12_data.csv").mapIndexed { idx, row ->
-            val ageRaw  = row.col("age_group")
-            val age     = ageRawToMonths(ageRaw)
-            val lang    = row.col("language")
-            val topic   = row.col("topic")
-            Milestone(
-                id          = "foreign_$idx",
-                title       = "$lang: ${topic.take(35)}",
-                subtitle    = row.col("input").take(70),
-                domain      = "Foreign Language",
-                ageMonths   = age,
-                ageRange    = "$ageRaw yr",
-                ageGroupId  = ageGroupForMonth(age),
-                source      = DatasetSource.FOREIGN_LANGUAGE,
-                apiQuery    = "Foreign language $lang $topic $ageRaw years child learning",
-                iconEmoji   = emojiLang(lang),
-                accentColor = DatasetSource.FOREIGN_LANGUAGE.colorHex
-            )
-        }
-
-    // ── good_bad_touch_data.csv ───────────────────────────────────────────────
-
-    private fun loadSafety(): List<Milestone> =
-        openCsv("good_bad_touch_data.csv").mapIndexed { idx, row ->
-            val ageRaw = row.col("age_group")
-            val age    = when {
-                ageRaw.contains("4") -> 48
-                ageRaw.contains("6") -> 72
-                ageRaw.contains("9") -> 108
-                else                 -> 48
-            }
-            val env   = row.col("environment")
-            val topic = row.col("topic")
-            Milestone(
-                id          = "safety_$idx",
-                title       = topic.take(50),
-                subtitle    = row.col("learning_goal").take(70),
-                domain      = "Safety",
-                ageMonths   = age,
-                ageRange    = "$ageRaw yr",
-                ageGroupId  = ageGroupForMonth(age),
-                source      = DatasetSource.SAFETY,
-                apiQuery    = "child safety $topic ${row.col("scenario")} $env $ageRaw years",
-                iconEmoji   = emojiSafety(env),
-                accentColor = DatasetSource.SAFETY.colorHex
-            )
-        }
 
     // ── Emoji helpers ─────────────────────────────────────────────────────────
 
@@ -486,17 +563,6 @@ class DatasetLoader(private val context: Context) {
         d.contains("social")   -> "🏘️"
         d.contains("physical") -> "⚽"
         else                   -> "📚"
-    }
-
-    private fun emoji5to12(d: String) = when {
-        d.contains("cognitive")  -> "🧠"
-        d.contains("creativity") -> "🎨"
-        d.contains("daily")      -> "🏠"
-        d.contains("language")   -> "🗣️"
-        d.contains("nature")     -> "🌿"
-        d.contains("physical")   -> "🏃"
-        d.contains("social")     -> "🤝"
-        else                     -> "⭐"
     }
 
     private fun emojiLang(lang: String) = when (lang.lowercase()) {

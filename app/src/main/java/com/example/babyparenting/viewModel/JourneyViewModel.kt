@@ -25,9 +25,9 @@ class JourneyViewModel(app: Application) : AndroidViewModel(app) {
 
     val milestones: StateFlow<List<Milestone>> = milestoneRepo.milestones
     val ageGroups:  StateFlow<List<AgeGroup>>  = milestoneRepo.ageGroups
-    val progress:   StateFlow<JourneyProgress> = milestoneRepo.progress
-    val isLoading:  StateFlow<Boolean>          = milestoneRepo.isLoading
-    val loadError:  StateFlow<String?>          = milestoneRepo.error
+    val progress:   StateFlow<JourneyProgress>  = milestoneRepo.progress
+    val isLoading:  StateFlow<Boolean>           = milestoneRepo.isLoading
+    val loadError:  StateFlow<String?>           = milestoneRepo.error
 
     private val _selectedMilestone = MutableStateFlow<Milestone?>(null)
     val selectedMilestone: StateFlow<Milestone?> = _selectedMilestone.asStateFlow()
@@ -35,69 +35,106 @@ class JourneyViewModel(app: Application) : AndroidViewModel(app) {
     private val _adviceState = MutableStateFlow<UiState<AdviceResponse>>(UiState.Idle)
     val adviceState: StateFlow<UiState<AdviceResponse>> = _adviceState.asStateFlow()
 
-    private val _activeFilter = MutableStateFlow<DatasetSource?>(null)
+    private val _activeFilter       = MutableStateFlow<DatasetSource?>(null)
     val activeFilter: StateFlow<DatasetSource?> = _activeFilter.asStateFlow()
-
-    private val _filteredMilestones = MutableStateFlow<List<Milestone>>(emptyList())
-    val filteredMilestones: StateFlow<List<Milestone>> = _filteredMilestones.asStateFlow()
 
     private val _visibleMilestones = MutableStateFlow<List<Milestone>>(emptyList())
     val visibleMilestones: StateFlow<List<Milestone>> = _visibleMilestones.asStateFlow()
 
-    init {
-        viewModelScope.launch { milestoneRepo.loadAll() }
+    private val _filteredMilestones = MutableStateFlow<List<Milestone>>(emptyList())
+    val filteredMilestones: StateFlow<List<Milestone>> = _filteredMilestones.asStateFlow()
 
-        // ✅ milestoneRepo.milestones flow collect karo — har toggle pe yeh fire hoga
+    init {
+        viewModelScope.launch { milestoneRepo.initialLoad() }
+
         viewModelScope.launch {
             combine(milestoneRepo.milestones, _activeFilter) { all, filter ->
                 if (filter == null) all else all.filter { it.source == filter }
             }.collect { filtered ->
                 _filteredMilestones.value = filtered
                 _visibleMilestones.value  = computeVisible(filtered)
+                checkAndLoadNextGroup(filtered)
             }
         }
     }
 
-    fun toggleCompletion(id: String) {
-        // Repository update karega → milestones flow fire hoga → combine trigger hoga
-        // → computeVisible dobara chalega → UI automatically update hogi ✅
-        milestoneRepo.toggleCompletion(id)
+    // ── Completion — ONE WAY, no undo ─────────────────────────────────────────
+
+    /**
+     * Mark a milestone as complete. This is permanent — once done, cannot be undone.
+     * Called from AdviceScreen's "Mark as Complete" button.
+     */
+    fun markComplete(id: String) {
+        milestoneRepo.markComplete(id)   // one-way in repository
     }
 
-    // ── Pagination logic ──────────────────────────────────────────────────────
-    // Pehle 4 milestones dikhao. Agar sab 4 complete toh next 4 unlock.
-    // Aise hi chalta rahega jab tak sab complete na ho jaaye.
+    /**
+     * Called from MilestoneCard's circle tap (also one-way).
+     * If already complete — do nothing.
+     */
+    fun toggleCompletion(id: String) {
+        milestoneRepo.markComplete(id)   // same as markComplete — no undo
+    }
+
+    // ── Visible logic — same age group, 4-4 ──────────────────────────────────
+
     private fun computeVisible(all: List<Milestone>): List<Milestone> {
         if (all.isEmpty()) return emptyList()
-        val result     = mutableListOf<Milestone>()
+
+        val activeGroupId = findActiveGroupId(all) ?: return all
+
+        val previousDone   = all.filter { it.ageGroupId < activeGroupId }
+        val activeGroupMs  = all.filter { it.ageGroupId == activeGroupId }
+
+        val visibleFromActive = mutableListOf<Milestone>()
         var batchStart = 0
-
-        while (batchStart < all.size) {
-            val batchEnd  = minOf(batchStart + 4, all.size)
-            val batch     = all.subList(batchStart, batchEnd)
-            result.addAll(batch)
-
-            // Is batch mein koi bhi incomplete hai toh yahaan rok do
+        while (batchStart < activeGroupMs.size) {
+            val end   = minOf(batchStart + 4, activeGroupMs.size)
+            val batch = activeGroupMs.subList(batchStart, end)
+            visibleFromActive.addAll(batch)
             if (!batch.all { it.isCompleted }) break
             batchStart += 4
         }
-        return result
+
+        return previousDone + visibleFromActive
     }
 
-    // ── Lock check ────────────────────────────────────────────────────────────
-    // Step 1 (index 0 in any batch) → always unlocked
-    // Step 2,3,4 → previous step complete hona chahiye
+    private fun findActiveGroupId(all: List<Milestone>): Int? =
+        all.map { it.ageGroupId }
+            .distinct()
+            .sorted()
+            .firstOrNull { groupId ->
+                all.filter { it.ageGroupId == groupId }.any { !it.isCompleted }
+            }
+
+    private fun checkAndLoadNextGroup(all: List<Milestone>) {
+        val activeGroupId  = findActiveGroupId(all) ?: return
+        val activeGroupMs  = all.filter { it.ageGroupId == activeGroupId }
+        if (activeGroupMs.any { !it.isCompleted }) return
+        viewModelScope.launch {
+            milestoneRepo.loadNextGroupIfNeeded(activeGroupId + 1)
+        }
+    }
+
+    // ── Lock logic ────────────────────────────────────────────────────────────
+
     fun isLocked(milestone: Milestone): Boolean {
-        val all          = _visibleMilestones.value
-        val idx          = all.indexOf(milestone)
-        if (idx <= 0)    return false
-        val indexInBatch = idx % 4
-        if (indexInBatch == 0) return false   // har batch ka pehla step unlocked
-        val prev         = all.getOrNull(idx - 1) ?: return false
+        val visible       = _visibleMilestones.value
+        val activeGroupId = findActiveGroupId(visible)
+        if (milestone.ageGroupId != activeGroupId) return false
+
+        val groupVisible = visible.filter { it.ageGroupId == activeGroupId }
+        val idxInGroup   = groupVisible.indexOf(milestone)
+        if (idxInGroup <= 0) return false
+
+        val indexInBatch = idxInGroup % 4
+        if (indexInBatch == 0) return false
+
+        val prev = groupVisible.getOrNull(idxInGroup - 1) ?: return false
         return !prev.isCompleted
     }
 
-    // ── Rest same ─────────────────────────────────────────────────────────────
+    // ── Actions ───────────────────────────────────────────────────────────────
 
     fun onMilestoneTapped(milestone: Milestone) {
         _selectedMilestone.value = milestone
@@ -108,12 +145,12 @@ class JourneyViewModel(app: Application) : AndroidViewModel(app) {
         _activeFilter.value = if (_activeFilter.value == source) null else source
     }
 
-    fun clearFilter()                { _activeFilter.value = null }
-    fun setChildAge(months: Int)     = milestoneRepo.setChildAge(months)
-    fun setChildName(name: String)   = milestoneRepo.setChildName(name)
-    fun getChildAgeMonths(): Int     = milestoneRepo.getChildAgeMonths()
-    fun getChildName(): String       = milestoneRepo.getChildName()
-    fun refreshAfterAdminEdit()      = milestoneRepo.refreshAdminMilestones()
+    fun clearFilter()                    { _activeFilter.value = null }
+    fun setChildAge(months: Int)         = milestoneRepo.setChildAge(months)
+    fun setChildName(name: String)       = milestoneRepo.setChildName(name)
+    fun getChildAgeMonths(): Int         = milestoneRepo.getChildAgeMonths()
+    fun getChildName(): String           = milestoneRepo.getChildName()
+    fun refreshAfterAdminEdit()          = milestoneRepo.refreshAdminMilestones()
 
     fun resetAdvice() {
         _adviceState.value       = UiState.Idle
@@ -122,7 +159,9 @@ class JourneyViewModel(app: Application) : AndroidViewModel(app) {
 
     fun retryAdvice() { _selectedMilestone.value?.let { fetchAdvice(it) } }
 
-    fun reloadDatasets() { viewModelScope.launch { milestoneRepo.loadAll() } }
+    fun reloadDatasets() {
+        viewModelScope.launch { milestoneRepo.initialLoad() }
+    }
 
     private fun fetchAdvice(milestone: Milestone) {
         viewModelScope.launch {

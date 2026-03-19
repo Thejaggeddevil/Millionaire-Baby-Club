@@ -9,50 +9,55 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 
-// ── UI states for admin panel ──────────────────────────────────────────────────
-
 sealed class AdminAuthState {
-    object LoggedOut     : AdminAuthState()
-    object LoggedIn      : AdminAuthState()
-    data class Error(val message: String) : AdminAuthState()
+    object LoggedOut                            : AdminAuthState()
+    object LoggedIn                             : AdminAuthState()
+    data class Error(val message: String)       : AdminAuthState()
 }
 
 sealed class AdminPanelState {
-    object List                                       : AdminPanelState()
-    data class AddEdit(val milestone: AdminMilestone?) : AdminPanelState()  // null = new
-    data class ConfirmDelete(val milestone: AdminMilestone) : AdminPanelState()
-    object ChangePassword                              : AdminPanelState()
+    object List                                              : AdminPanelState()
+    data class AddEdit(val milestone: AdminMilestone?)       : AdminPanelState()
+    data class ConfirmDelete(val milestone: AdminMilestone)  : AdminPanelState()
+    object ChangePassword                                    : AdminPanelState()
 }
 
 class AdminViewModel(app: Application) : AndroidViewModel(app) {
 
     private val store = AdminMilestoneStore(app)
 
-    // ── Auth ──────────────────────────────────────────────────────────────────
-    private val _authState = MutableStateFlow<AdminAuthState>(AdminAuthState.LoggedOut)
+    private val _authState  = MutableStateFlow<AdminAuthState>(AdminAuthState.LoggedOut)
     val authState: StateFlow<AdminAuthState> = _authState.asStateFlow()
 
-    // ── Panel navigation ──────────────────────────────────────────────────────
     private val _panelState = MutableStateFlow<AdminPanelState>(AdminPanelState.List)
     val panelState: StateFlow<AdminPanelState> = _panelState.asStateFlow()
 
-    // ── Milestone list ────────────────────────────────────────────────────────
     private val _milestones = MutableStateFlow<List<AdminMilestone>>(emptyList())
     val milestones: StateFlow<List<AdminMilestone>> = _milestones.asStateFlow()
 
-    // ── Toast messages ────────────────────────────────────────────────────────
     private val _toastMessage = MutableStateFlow<String?>(null)
     val toastMessage: StateFlow<String?> = _toastMessage.asStateFlow()
 
     init { refreshList() }
 
-    // ── Auth actions ──────────────────────────────────────────────────────────
+    // ── Auth ──────────────────────────────────────────────────────────────────
 
+    /** Called from AdminPanelScreen internal login form */
     fun login(password: String) {
         if (store.checkPassword(password)) {
             _authState.value = AdminAuthState.LoggedIn
         } else {
             _authState.value = AdminAuthState.Error("Incorrect password")
+        }
+    }
+
+    /** Called from LoginScreen — returns true/false for navigation decision */
+    fun loginFromStart(password: String): Boolean {
+        return if (store.checkPassword(password)) {
+            _authState.value = AdminAuthState.LoggedIn
+            true
+        } else {
+            false
         }
     }
 
@@ -68,29 +73,25 @@ class AdminViewModel(app: Application) : AndroidViewModel(app) {
             newPwd != confirm            -> "Passwords do not match"
             else -> {
                 store.setAdminPassword(newPwd)
-                _panelState.value = AdminPanelState.List
-                _toastMessage.value = "Password changed successfully"
-                null // no error
+                _panelState.value   = AdminPanelState.List
+                _toastMessage.value = "Password changed"
+                null
             }
         }
     }
 
     // ── Navigation ────────────────────────────────────────────────────────────
 
-    fun openAddNew()                           { _panelState.value = AdminPanelState.AddEdit(null) }
-    fun openEdit(m: AdminMilestone)            { _panelState.value = AdminPanelState.AddEdit(m) }
-    fun openConfirmDelete(m: AdminMilestone)   { _panelState.value = AdminPanelState.ConfirmDelete(m) }
-    fun openChangePassword()                   { _panelState.value = AdminPanelState.ChangePassword }
-    fun backToList()                           { _panelState.value = AdminPanelState.List }
+    fun openAddNew()                          { _panelState.value = AdminPanelState.AddEdit(null) }
+    fun openEdit(m: AdminMilestone)           { _panelState.value = AdminPanelState.AddEdit(m) }
+    fun openConfirmDelete(m: AdminMilestone)  { _panelState.value = AdminPanelState.ConfirmDelete(m) }
+    fun openChangePassword()                  { _panelState.value = AdminPanelState.ChangePassword }
+    fun backToList()                          { _panelState.value = AdminPanelState.List }
 
     // ── CRUD ──────────────────────────────────────────────────────────────────
 
-    /**
-     * Save — handles both add and update based on whether id is blank.
-     * Returns an error string if validation fails, null if success.
-     */
     fun save(milestone: AdminMilestone): String? {
-        if (milestone.title.isBlank()) return "Title is required"
+        if (milestone.title.isBlank())    return "Title is required"
         if (milestone.apiQuery.isBlank()) return "Backend query is required"
 
         if (milestone.id.isBlank() || store.getById(milestone.id) == null) {
