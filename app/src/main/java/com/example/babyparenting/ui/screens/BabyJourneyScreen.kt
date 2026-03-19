@@ -365,7 +365,9 @@ private fun AgeDialog(currentAge: Int, childName: String, onConfirm: (String, In
                     }
                 }
             }
-        },
+        }
+
+        ,
         confirmButton = {
             Button(onClick = { onConfirm(nameInput.trim(), months) },
                 colors = ButtonDefaults.buttonColors(containerColor = AppColors.Coral),
