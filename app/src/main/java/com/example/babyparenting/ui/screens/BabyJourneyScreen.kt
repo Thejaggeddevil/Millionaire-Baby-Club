@@ -1,8 +1,13 @@
 package com.example.babyparenting.ui.screens
 
+import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.core.Spring
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.spring
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.slideInVertically
+import androidx.compose.animation.slideOutVertically
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -26,18 +31,26 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.AdminPanelSettings
+import androidx.compose.material.icons.filled.DarkMode
+import androidx.compose.material.icons.filled.LightMode
+import androidx.compose.material.icons.filled.Menu
 import androidx.compose.material.icons.filled.Person
 import androidx.compose.material.icons.filled.Refresh
+import androidx.compose.material.icons.filled.Stars
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
 import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.OutlinedTextFieldDefaults
 import androidx.compose.material3.Slider
 import androidx.compose.material3.SliderDefaults
+import androidx.compose.material3.Switch
+import androidx.compose.material3.SwitchDefaults
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
@@ -49,7 +62,9 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.text.font.FontWeight
@@ -58,6 +73,7 @@ import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.compose.ui.zIndex
 import com.example.babyparenting.data.model.AgeGroup
 import com.example.babyparenting.data.model.JourneyProgress
 import com.example.babyparenting.data.model.Milestone
@@ -66,7 +82,7 @@ import com.example.babyparenting.ui.components.MilestoneCard
 import com.example.babyparenting.ui.components.PathCanvas
 import com.example.babyparenting.ui.components.SectionHeader
 import com.example.babyparenting.ui.components.computeNodePositions
-import com.example.babyparenting.ui.theme.AppColors
+import com.example.babyparenting.ui.theme.LocalAppColors
 import com.example.babyparenting.viewmodel.JourneyViewModel
 import kotlin.math.roundToInt
 
@@ -77,8 +93,10 @@ fun BabyJourneyScreen(
     viewModel: JourneyViewModel,
     onMilestoneTapped: (Milestone) -> Unit,
     onSettingsTapped: () -> Unit,
-    onParentHubTapped: () -> Unit
+    onParentHubTapped: () -> Unit,
+    onToggleTheme: () -> Unit
 ) {
+    val c              = LocalAppColors.current
     val milestones     by viewModel.visibleMilestones.collectAsState()
     val ageGroups      by viewModel.ageGroups.collectAsState()
     val progress       by viewModel.progress.collectAsState()
@@ -86,34 +104,59 @@ fun BabyJourneyScreen(
     val loadError      by viewModel.loadError.collectAsState()
     val completedCount  = milestones.count { it.isCompleted }
     var showAgeDialog   by remember { mutableStateOf(false) }
+    var menuExpanded    by remember { mutableStateOf(false) }
 
-    Column(
-        Modifier
-            .fillMaxSize()
-            .background(AppColors.BgMain)
-            .statusBarsPadding()
-    ) {
-        JourneyHeader(
-            progress          = progress,
-            onEditAge         = { showAgeDialog = true },
-            onSettingsTapped  = onSettingsTapped,
-            onParentHubTapped = onParentHubTapped
-        )
+    Box(Modifier.fillMaxSize()) {
+        Column(
+            Modifier.fillMaxSize().background(c.bgMain).statusBarsPadding()
+        ) {
+            JourneyHeader(
+                progress      = progress,
+                isDark        = c.isDark,
+                onEditAge     = { showAgeDialog = true },
+                onMenuClicked = { menuExpanded = !menuExpanded }
+            )
 
-        Box(Modifier.weight(1f).fillMaxWidth()) {
-            when {
-                isLoading         -> LoadingView()
-                loadError != null -> ErrorView(loadError!!) { viewModel.reloadDatasets() }
-                milestones.isEmpty() -> EmptyView()
-                else -> JourneyMap(
-                    milestones         = milestones,
-                    ageGroups          = ageGroups,
-                    completedCount     = completedCount,
-                    onMilestoneTapped  = { m -> if (!viewModel.isLocked(m)) onMilestoneTapped(m) },
-                    onToggleCompletion = { id -> viewModel.markComplete(id) },
-                    isLocked           = { viewModel.isLocked(it) }
-                )
+            Box(Modifier.weight(1f).fillMaxWidth()) {
+                when {
+                    isLoading         -> LoadingView()
+                    loadError != null -> ErrorView(loadError!!) { viewModel.reloadDatasets() }
+                    milestones.isEmpty() -> EmptyView()
+                    else -> JourneyMap(
+                        milestones         = milestones,
+                        ageGroups          = ageGroups,
+                        completedCount     = completedCount,
+                        onMilestoneTapped  = { m -> if (!viewModel.isLocked(m)) onMilestoneTapped(m) },
+                        onToggleCompletion = { id -> viewModel.markComplete(id) },
+                        isLocked           = { viewModel.isLocked(it) }
+                    )
+                }
             }
+        }
+
+        // ── Hamburger dropdown menu ──────────────────────────────────────────
+        AnimatedVisibility(
+            visible = menuExpanded,
+            enter   = fadeIn() + slideInVertically { -it / 2 },
+            exit    = fadeOut() + slideOutVertically { -it / 2 },
+            modifier = Modifier.align(Alignment.TopEnd).zIndex(10f)
+                .statusBarsPadding().padding(top = 56.dp, end = 12.dp)
+        ) {
+            HamburgerMenu(
+                isDark          = c.isDark,
+                onParentHub     = { menuExpanded = false; onParentHubTapped() },
+                onMilestones    = { menuExpanded = false },  // already on journey
+                onSettings      = { menuExpanded = false; onSettingsTapped() },
+                onToggleTheme   = { menuExpanded = false; onToggleTheme() }
+            )
+        }
+
+        // Dismiss overlay when menu open
+        if (menuExpanded) {
+            Box(
+                Modifier.fillMaxSize().zIndex(9f)
+                    .clickable { menuExpanded = false }
+            )
         }
     }
 
@@ -131,23 +174,130 @@ fun BabyJourneyScreen(
     }
 }
 
+// ── Hamburger dropdown ────────────────────────────────────────────────────────
+
+@Composable
+private fun HamburgerMenu(
+    isDark: Boolean,
+    onParentHub: () -> Unit,
+    onMilestones: () -> Unit,
+    onSettings: () -> Unit,
+    onToggleTheme: () -> Unit
+) {
+    val c = LocalAppColors.current
+
+    Column(
+        modifier = Modifier
+            .width(220.dp)
+            .shadow(16.dp, RoundedCornerShape(16.dp))
+            .clip(RoundedCornerShape(16.dp))
+            .background(c.menuBg)
+            .border(1.dp, c.border, RoundedCornerShape(16.dp))
+            .padding(8.dp),
+        verticalArrangement = Arrangement.spacedBy(2.dp)
+    ) {
+        MenuItem(
+            icon     = Icons.Default.AdminPanelSettings,
+            label    = "Parent Hub",
+            color    = c.lavender,
+            onClick  = onParentHub
+        )
+        MenuDivider()
+        MenuItem(
+            icon     = Icons.Default.Stars,
+            label    = "Milestones",
+            color    = c.coral,
+            onClick  = onMilestones
+        )
+        MenuDivider()
+        MenuItem(
+            icon     = Icons.Default.Person,
+            label    = "Settings",
+            color    = c.sky,
+            onClick  = onSettings
+        )
+        MenuDivider()
+
+        // Appearance toggle row
+        Row(
+            verticalAlignment = Alignment.CenterVertically,
+            modifier = Modifier
+                .fillMaxWidth()
+                .clip(RoundedCornerShape(10.dp))
+                .background(c.menuItemBg)
+                .padding(horizontal = 14.dp, vertical = 10.dp)
+        ) {
+            Icon(
+                if (isDark) Icons.Default.DarkMode else Icons.Default.LightMode,
+                contentDescription = null,
+                tint     = c.gold,
+                modifier = Modifier.size(20.dp)
+            )
+            Spacer(Modifier.width(10.dp))
+            Text(
+                if (isDark) "Dark Mode" else "Light Mode",
+                fontSize   = 14.sp,
+                fontWeight = FontWeight.Medium,
+                color      = c.textPrimary,
+                modifier   = Modifier.weight(1f)
+            )
+            Switch(
+                checked         = isDark,
+                onCheckedChange = { onToggleTheme() },
+                colors          = SwitchDefaults.colors(
+                    checkedThumbColor   = c.bgMain,
+                    checkedTrackColor   = c.lavender,
+                    uncheckedThumbColor = c.bgMain,
+                    uncheckedTrackColor = c.coral
+                )
+            )
+        }
+    }
+}
+
+@Composable
+private fun MenuItem(icon: ImageVector, label: String, color: Color, onClick: () -> Unit) {
+    val c = LocalAppColors.current
+    Row(
+        verticalAlignment = Alignment.CenterVertically,
+        modifier = Modifier
+            .fillMaxWidth()
+            .clip(RoundedCornerShape(10.dp))
+            .background(c.menuItemBg)
+            .clickable { onClick() }
+            .padding(horizontal = 14.dp, vertical = 12.dp)
+    ) {
+        Box(
+            contentAlignment = Alignment.Center,
+            modifier = Modifier.size(30.dp).clip(CircleShape).background(color.copy(alpha = 0.15f))
+        ) {
+            Icon(icon, null, tint = color, modifier = Modifier.size(17.dp))
+        }
+        Spacer(Modifier.width(12.dp))
+        Text(label, fontSize = 14.sp, fontWeight = FontWeight.Medium, color = c.textPrimary)
+    }
+}
+
+@Composable
+private fun MenuDivider() {
+    val c = LocalAppColors.current
+    Box(Modifier.fillMaxWidth().height(1.dp).background(c.menuDivider))
+}
+
 // ── Journey Map ───────────────────────────────────────────────────────────────
 
 @Composable
 private fun JourneyMap(
-    milestones: List<Milestone>,
-    ageGroups: List<AgeGroup>,
-    completedCount: Int,
-    onMilestoneTapped: (Milestone) -> Unit,
-    onToggleCompletion: (String) -> Unit,
+    milestones: List<Milestone>, ageGroups: List<AgeGroup>, completedCount: Int,
+    onMilestoneTapped: (Milestone) -> Unit, onToggleCompletion: (String) -> Unit,
     isLocked: (Milestone) -> Boolean
 ) {
-    val totalH          = SEGMENT_DP * (milestones.size + 2)
-    val density         = LocalDensity.current
-    val screenWidthDp   = LocalConfiguration.current.screenWidthDp.dp
-    val wPx             = with(density) { screenWidthDp.toPx() }
-    val hPx             = with(density) { totalH.toPx() }
-    val nodes           = computeNodePositions(milestones.size, wPx, hPx)
+    val totalH        = SEGMENT_DP * (milestones.size + 2)
+    val density       = LocalDensity.current
+    val screenWidthDp = LocalConfiguration.current.screenWidthDp.dp
+    val wPx           = with(density) { screenWidthDp.toPx() }
+    val hPx           = with(density) { totalH.toPx() }
+    val nodes         = computeNodePositions(milestones.size, wPx, hPx)
 
     Box(Modifier.fillMaxWidth().verticalScroll(rememberScrollState())) {
         Box(Modifier.fillMaxWidth().height(totalH)) {
@@ -159,7 +309,7 @@ private fun JourneyMap(
 
                 val isFirstInGroup = gIdx == 0 || milestones[gIdx - 1].ageGroupId != milestone.ageGroupId
                 if (isFirstInGroup) {
-                    val group   = ageGroups.find { it.id == milestone.ageGroupId }
+                    val group = ageGroups.find { it.id == milestone.ageGroupId }
                     if (group != null) {
                         val headerY = with(density) { nodes[gIdx].y.toDp() } - 50.dp
                         SectionHeader(
@@ -201,45 +351,33 @@ private fun JourneyMap(
 @Composable
 private fun JourneyHeader(
     progress: JourneyProgress,
+    isDark: Boolean,
     onEditAge: () -> Unit,
-    onSettingsTapped: () -> Unit,
-    onParentHubTapped: () -> Unit
+    onMenuClicked: () -> Unit
 ) {
+    val c       = LocalAppColors.current
     val animProg by animateFloatAsState(progress.progressFraction, spring(Spring.DampingRatioNoBouncy), label = "p")
 
     Column(
-        Modifier.fillMaxWidth().background(AppColors.BgHeader)
+        Modifier.fillMaxWidth().background(c.bgSurface)
             .padding(start = 16.dp, end = 16.dp, top = 14.dp, bottom = 12.dp)
     ) {
         Row(Modifier.fillMaxWidth(), Arrangement.SpaceBetween, Alignment.CenterVertically) {
             Column(Modifier.weight(1f)) {
                 Text(
                     if (progress.childName.isNotBlank()) "${progress.childName}'s Journey" else "Baby Growth Journey",
-                    fontSize = 20.sp, fontWeight = FontWeight.ExtraBold, color = AppColors.TextPrimary
+                    fontSize = 20.sp, fontWeight = FontWeight.ExtraBold, color = c.textPrimary
                 )
-                Text("Track every milestone with love", fontSize = 12.sp, color = AppColors.TextSecondary)
+                Text("Track every milestone with love", fontSize = 12.sp, color = c.textSecondary)
             }
 
-            // Parent Hub button
-            Box(
-                modifier = Modifier
-                    .clip(RoundedCornerShape(10.dp))
-                    .background(AppColors.Lavender.copy(alpha = 0.18f))
-                    .clickable { onParentHubTapped() }
-                    .padding(horizontal = 10.dp, vertical = 6.dp)
-            ) {
-                Text("Parent Hub", fontSize = 11.sp, fontWeight = FontWeight.Bold, color = AppColors.Lavender)
-            }
-
-            Spacer(Modifier.width(8.dp))
-
-            // Profile / settings
+            // Hamburger icon
             Box(
                 contentAlignment = Alignment.Center,
-                modifier = Modifier.size(38.dp).clip(CircleShape)
-                    .background(AppColors.Coral.copy(alpha = 0.15f)).clickable { onSettingsTapped() }
+                modifier = Modifier.size(40.dp).clip(RoundedCornerShape(10.dp))
+                    .background(c.coral.copy(alpha = 0.12f)).clickable { onMenuClicked() }
             ) {
-                Icon(Icons.Default.Person, null, tint = AppColors.Coral, modifier = Modifier.size(20.dp))
+                Icon(Icons.Default.Menu, contentDescription = "Menu", tint = c.coral, modifier = Modifier.size(22.dp))
             }
         }
 
@@ -248,31 +386,24 @@ private fun JourneyHeader(
         Row(verticalAlignment = Alignment.CenterVertically) {
             Box(
                 modifier = Modifier.clip(RoundedCornerShape(8.dp))
-                    .background(AppColors.Coral.copy(alpha = 0.12f))
-                    .clickable { onEditAge() }
+                    .background(c.coral.copy(alpha = 0.12f)).clickable { onEditAge() }
                     .padding(horizontal = 10.dp, vertical = 5.dp)
             ) {
                 Text(
                     if (progress.childAgeMonths == 0) "Set Age ▾" else formatAge(progress.childAgeMonths) + " ▾",
-                    fontSize = 11.sp, fontWeight = FontWeight.SemiBold, color = AppColors.Coral
+                    fontSize = 11.sp, fontWeight = FontWeight.SemiBold, color = c.coral
                 )
             }
-
             Spacer(Modifier.width(10.dp))
-
             LinearProgressIndicator(
                 progress   = animProg,
                 modifier   = Modifier.weight(1f).height(7.dp).clip(RoundedCornerShape(4.dp)),
-                color      = AppColors.Coral,
-                trackColor = AppColors.Border
+                color      = c.coral,
+                trackColor = c.border
             )
-
             Spacer(Modifier.width(10.dp))
-
-            Text(
-                "${progress.completedMilestones}/${progress.totalMilestones}",
-                fontSize = 11.sp, fontWeight = FontWeight.Bold, color = AppColors.Coral
-            )
+            Text("${progress.completedMilestones}/${progress.totalMilestones}",
+                fontSize = 11.sp, fontWeight = FontWeight.Bold, color = c.coral)
         }
     }
 }
@@ -281,28 +412,30 @@ private fun JourneyHeader(
 
 @Composable
 private fun LoadingView() {
+    val c = LocalAppColors.current
     Box(Modifier.fillMaxWidth().padding(top = 120.dp), Alignment.TopCenter) {
         Column(horizontalAlignment = Alignment.CenterHorizontally) {
-            CircularProgressIndicator(color = AppColors.Coral, strokeWidth = 3.dp, modifier = Modifier.size(44.dp))
+            CircularProgressIndicator(color = c.coral, strokeWidth = 3.dp, modifier = Modifier.size(44.dp))
             Spacer(Modifier.height(16.dp))
-            Text("Loading milestones…", fontSize = 14.sp, color = AppColors.TextSecondary)
+            Text("Loading milestones…", fontSize = 14.sp, color = c.textSecondary)
             Spacer(Modifier.height(4.dp))
-            Text("Only happens once", fontSize = 12.sp, color = AppColors.TextMuted)
+            Text("Only happens once", fontSize = 12.sp, color = c.textMuted)
         }
     }
 }
 
 @Composable
 private fun ErrorView(message: String, onRetry: () -> Unit) {
+    val c = LocalAppColors.current
     Column(
         modifier            = Modifier.fillMaxWidth().padding(horizontal = 32.dp, vertical = 60.dp),
         horizontalAlignment = Alignment.CenterHorizontally
     ) {
-        Text("Could not load data", fontSize = 16.sp, fontWeight = FontWeight.SemiBold, color = AppColors.TextPrimary)
+        Text("Could not load data", fontSize = 16.sp, fontWeight = FontWeight.SemiBold, color = c.textPrimary)
         Spacer(Modifier.height(8.dp))
-        Text(message, fontSize = 12.sp, color = AppColors.TextSecondary, textAlign = TextAlign.Center)
+        Text(message, fontSize = 12.sp, color = c.textSecondary, textAlign = TextAlign.Center)
         Spacer(Modifier.height(18.dp))
-        Button(onClick = onRetry, colors = ButtonDefaults.buttonColors(containerColor = AppColors.Coral), shape = RoundedCornerShape(10.dp)) {
+        Button(onClick = onRetry, colors = ButtonDefaults.buttonColors(containerColor = c.coral), shape = RoundedCornerShape(10.dp)) {
             Icon(Icons.Default.Refresh, null, modifier = Modifier.size(15.dp), tint = Color.White)
             Spacer(Modifier.width(6.dp))
             Text("Retry", color = Color.White)
@@ -312,9 +445,10 @@ private fun ErrorView(message: String, onRetry: () -> Unit) {
 
 @Composable
 private fun EmptyView() {
+    val c = LocalAppColors.current
     Box(Modifier.fillMaxWidth().padding(top = 80.dp), Alignment.TopCenter) {
         Text("Complete the current batch to unlock more",
-            fontSize = 14.sp, color = AppColors.TextSecondary, textAlign = TextAlign.Center,
+            fontSize = 14.sp, color = c.textSecondary, textAlign = TextAlign.Center,
             modifier = Modifier.padding(horizontal = 32.dp))
     }
 }
@@ -323,15 +457,16 @@ private fun EmptyView() {
 
 @Composable
 private fun AgeDialog(currentAge: Int, childName: String, onConfirm: (String, Int) -> Unit, onDismiss: () -> Unit) {
+    val c = LocalAppColors.current
     var sliderVal by remember { mutableStateOf(currentAge.toFloat()) }
     var nameInput by remember { mutableStateOf(childName) }
     val months = sliderVal.roundToInt()
 
     AlertDialog(
         onDismissRequest = onDismiss,
-        containerColor   = AppColors.BgElevated,
+        containerColor   = c.bgElevated,
         shape            = RoundedCornerShape(18.dp),
-        title = { Text("Child's Profile", fontWeight = FontWeight.Bold, fontSize = 16.sp, color = AppColors.TextPrimary) },
+        title = { Text("Child's Profile", fontWeight = FontWeight.Bold, fontSize = 16.sp, color = c.textPrimary) },
         text = {
             Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
                 OutlinedTextField(
@@ -339,43 +474,39 @@ private fun AgeDialog(currentAge: Int, childName: String, onConfirm: (String, In
                     label = { Text("Child's name") }, singleLine = true,
                     modifier = Modifier.fillMaxWidth(), shape = RoundedCornerShape(10.dp),
                     colors = OutlinedTextFieldDefaults.colors(
-                        focusedBorderColor = AppColors.Coral, unfocusedBorderColor = AppColors.Border,
-                        focusedLabelColor = AppColors.Coral, focusedTextColor = AppColors.TextPrimary,
-                        unfocusedTextColor = AppColors.TextPrimary,
-                        focusedContainerColor = AppColors.BgSurface, unfocusedContainerColor = AppColors.BgSurface
+                        focusedBorderColor = c.coral, unfocusedBorderColor = c.border,
+                        focusedLabelColor  = c.coral, focusedTextColor = c.textPrimary,
+                        unfocusedTextColor = c.textPrimary,
+                        focusedContainerColor = c.bgElevated, unfocusedContainerColor = c.bgElevated
                     )
                 )
                 Column {
                     Row(Modifier.fillMaxWidth(), Arrangement.SpaceBetween, Alignment.CenterVertically) {
-                        Text("Current age", fontSize = 13.sp, color = AppColors.TextSecondary)
-                        Text(formatAge(months), fontSize = 14.sp, fontWeight = FontWeight.Bold, color = AppColors.Coral)
+                        Text("Current age", fontSize = 13.sp, color = c.textSecondary)
+                        Text(formatAge(months), fontSize = 14.sp, fontWeight = FontWeight.Bold, color = c.coral)
                     }
                     Slider(
                         value = sliderVal, onValueChange = { sliderVal = it },
                         valueRange = 0f..144f, steps = 143,
-                        colors = SliderDefaults.colors(thumbColor = AppColors.Coral, activeTrackColor = AppColors.Coral, inactiveTrackColor = AppColors.Border)
+                        colors = SliderDefaults.colors(thumbColor = c.coral, activeTrackColor = c.coral, inactiveTrackColor = c.border)
                     )
                     Row(Modifier.fillMaxWidth(), Arrangement.SpaceBetween) {
-                        Text("Newborn", fontSize = 10.sp, color = AppColors.TextMuted)
-                        Text("12 years", fontSize = 10.sp, color = AppColors.TextMuted)
+                        Text("Newborn", fontSize = 10.sp, color = c.textMuted)
+                        Text("12 years", fontSize = 10.sp, color = c.textMuted)
                     }
                     if (months > 0) {
                         Spacer(Modifier.height(6.dp))
-                        Text("Past milestones will be auto-completed", fontSize = 11.sp, color = AppColors.Coral)
+                        Text("Past milestones will be auto-completed", fontSize = 11.sp, color = c.coral)
                     }
                 }
             }
-        }
-
-        ,
+        },
         confirmButton = {
             Button(onClick = { onConfirm(nameInput.trim(), months) },
-                colors = ButtonDefaults.buttonColors(containerColor = AppColors.Coral),
+                colors = ButtonDefaults.buttonColors(containerColor = c.coral),
                 shape = RoundedCornerShape(10.dp)) { Text("Save", color = Color.White) }
         },
-        dismissButton = {
-            TextButton(onClick = onDismiss) { Text("Cancel", color = AppColors.TextMuted) }
-        }
+        dismissButton = { TextButton(onClick = onDismiss) { Text("Cancel", color = c.textMuted) } }
     )
 }
 

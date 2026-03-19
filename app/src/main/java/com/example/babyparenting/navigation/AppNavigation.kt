@@ -20,6 +20,7 @@ import com.example.babyparenting.ui.screens.SettingsScreen
 import com.example.babyparenting.viewmodel.AdminViewModel
 import com.example.babyparenting.viewmodel.JourneyViewModel
 import com.example.babyparenting.viewmodel.ParentViewModel
+import androidx.compose.runtime.collectAsState
 
 object Routes {
     const val LOGIN        = "login"
@@ -34,6 +35,7 @@ object Routes {
 
 @Composable
 fun AppNavigation(
+    onToggleTheme: () -> Unit,
     navController: NavHostController = rememberNavController()
 ) {
     val context    = LocalContext.current
@@ -100,7 +102,8 @@ fun AppNavigation(
                     navController.navigate(Routes.ADVICE)
                 },
                 onSettingsTapped  = { navController.navigate(Routes.SETTINGS) },
-                onParentHubTapped = { navController.navigate(Routes.PARENT_HUB) }
+                onParentHubTapped = { navController.navigate(Routes.PARENT_HUB) },
+                onToggleTheme     = onToggleTheme   // ✅ FIX
             )
         }
 
@@ -143,7 +146,7 @@ fun AppNavigation(
 
         // ── Parent Guide Detail ───────────────────────────────────────────────
         composable(Routes.PARENT_DETAIL) {
-            val guide = parentVm.selectedGuide.value
+            val guide = parentVm.selectedGuide.collectAsState().value
             if (guide != null) {
                 ParentGuideDetailScreen(
                     guide  = guide,

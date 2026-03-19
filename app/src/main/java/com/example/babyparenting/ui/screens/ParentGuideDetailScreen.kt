@@ -34,11 +34,11 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.example.babyparenting.data.model.ParentGuide
-import com.example.babyparenting.ui.theme.AppColors
+import com.example.babyparenting.ui.theme.LocalAppColors
 
 private val accentPalette = listOf(
-    AppColors.Coral, AppColors.Peach, AppColors.Lavender,
-    AppColors.Mint, AppColors.Sky, Color(0xFFAB47BC)
+    Color(0xFFFF8B94), Color(0xFFFFB06A), Color(0xFF9B8FD4),
+    Color(0xFF4CAF82), Color(0xFF5E9BE0), Color(0xFFAB47BC)
 )
 
 @Composable
@@ -46,22 +46,22 @@ fun ParentGuideDetailScreen(guide: ParentGuide, onBack: () -> Unit) {
     val accent = accentPalette[guide.id.hashCode().and(0x7FFFFFFF) % accentPalette.size]
 
     Column(
-        modifier = Modifier.fillMaxWidth().background(AppColors.BgMain)
+        modifier = Modifier.fillMaxWidth().background(LocalAppColors.current.bgMain)
             .statusBarsPadding().navigationBarsPadding()
     ) {
         Row(
             verticalAlignment = Alignment.CenterVertically,
-            modifier = Modifier.fillMaxWidth().background(AppColors.BgTopBar)
+            modifier = Modifier.fillMaxWidth().background(LocalAppColors.current.bgSurface)
                 .padding(end = 16.dp, top = 4.dp, bottom = 4.dp)
         ) {
             IconButton(onClick = onBack) {
-                Icon(Icons.AutoMirrored.Filled.ArrowBack, null, tint = AppColors.TextSecondary)
+                Icon(Icons.AutoMirrored.Filled.ArrowBack, null, tint = LocalAppColors.current.textSecondary)
             }
             Column(Modifier.weight(1f)) {
                 Text(guide.skillName, fontSize = 15.sp, fontWeight = FontWeight.Bold,
-                    color = AppColors.TextPrimary, maxLines = 2)
+                    color = LocalAppColors.current.textPrimary, maxLines = 2)
                 Text("${guide.domain.replaceFirstChar { it.uppercase() }}  ·  ${guide.ageGroupLabel}  ·  ${guide.ageRange}",
-                    fontSize = 10.sp, color = AppColors.TextMuted)
+                    fontSize = 10.sp, color = LocalAppColors.current.textMuted)
             }
         }
 
@@ -92,26 +92,26 @@ fun ParentGuideDetailScreen(guide: ParentGuide, onBack: () -> Unit) {
             }
 
             if (guide.whyItMatters.isNotBlank())
-                DetailCard("Why it Matters", guide.whyItMatters, AppColors.Gold)
+                DetailCard("Why it Matters", guide.whyItMatters, LocalAppColors.current.gold)
             if (guide.howToTeach.isNotBlank())
-                DetailCard("How to Handle It", guide.howToTeach, AppColors.Sky)
+                DetailCard("How to Handle It", guide.howToTeach, LocalAppColors.current.sky)
 
             if (guide.dos.isNotEmpty() || guide.donts.isNotEmpty()) {
                 Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-                    if (guide.dos.isNotEmpty())   BulletBlock("Do",    guide.dos,   AppColors.Mint, Modifier.weight(1f))
-                    if (guide.donts.isNotEmpty()) BulletBlock("Avoid", guide.donts, AppColors.Red,  Modifier.weight(1f))
+                    if (guide.dos.isNotEmpty())   BulletBlock("Do",    guide.dos,   Color(0xFF4CAF82), Modifier.weight(1f))
+                    if (guide.donts.isNotEmpty()) BulletBlock("Avoid", guide.donts, LocalAppColors.current.red,  Modifier.weight(1f))
                 }
             }
 
             if (guide.tip.isNotBlank()) {
                 Column(
                     Modifier.fillMaxWidth().clip(RoundedCornerShape(12.dp))
-                        .background(AppColors.Gold.copy(alpha = 0.10f))
-                        .border(1.dp, AppColors.Yellow.copy(0.30f), RoundedCornerShape(12.dp)).padding(14.dp)
+                        .background(LocalAppColors.current.gold.copy(alpha = 0.10f))
+                        .border(1.dp, LocalAppColors.current.yellow.copy(0.30f), RoundedCornerShape(12.dp)).padding(14.dp)
                 ) {
-                    Text("Quick Tip", fontSize = 11.sp, fontWeight = FontWeight.Bold, color = AppColors.Gold, letterSpacing = 0.5.sp)
+                    Text("Quick Tip", fontSize = 11.sp, fontWeight = FontWeight.Bold, color = LocalAppColors.current.gold, letterSpacing = 0.5.sp)
                     Spacer(Modifier.height(5.dp))
-                    Text(guide.tip, fontSize = 13.sp, color = AppColors.TextPrimary, lineHeight = 19.sp)
+                    Text(guide.tip, fontSize = 13.sp, color = LocalAppColors.current.textPrimary, lineHeight = 19.sp)
                 }
             }
             Spacer(Modifier.height(20.dp))
@@ -121,17 +121,17 @@ fun ParentGuideDetailScreen(guide: ParentGuide, onBack: () -> Unit) {
 
 @Composable
 private fun DetailCard(label: String, body: String, labelColor: Color) {
-    Column(Modifier.fillMaxWidth().clip(RoundedCornerShape(12.dp)).background(AppColors.BgSurface)
+    Column(Modifier.fillMaxWidth().clip(RoundedCornerShape(12.dp)).background(LocalAppColors.current.bgSurface)
         .border(1.dp, labelColor.copy(0.22f), RoundedCornerShape(12.dp)).padding(14.dp)) {
         Text(label, fontSize = 11.sp, fontWeight = FontWeight.Bold, color = labelColor, letterSpacing = 0.5.sp)
         Spacer(Modifier.height(6.dp))
-        Text(body, fontSize = 14.sp, color = AppColors.TextPrimary, lineHeight = 21.sp)
+        Text(body, fontSize = 14.sp, color = LocalAppColors.current.textPrimary, lineHeight = 21.sp)
     }
 }
 
 @Composable
 private fun BulletBlock(label: String, items: List<String>, color: Color, modifier: Modifier = Modifier) {
-    Column(modifier.clip(RoundedCornerShape(12.dp)).background(AppColors.BgSurface)
+    Column(modifier.clip(RoundedCornerShape(12.dp)).background(LocalAppColors.current.bgSurface)
         .border(1.dp, color.copy(0.22f), RoundedCornerShape(12.dp)).padding(12.dp)) {
         Row(verticalAlignment = Alignment.CenterVertically) {
             Box(Modifier.size(6.dp).clip(CircleShape).background(color))
@@ -139,7 +139,7 @@ private fun BulletBlock(label: String, items: List<String>, color: Color, modifi
             Text(label, fontSize = 11.sp, fontWeight = FontWeight.Bold, color = color)
         }
         Spacer(Modifier.height(8.dp))
-        items.forEach { Text("• $it", fontSize = 12.sp, color = AppColors.TextPrimary,
+        items.forEach { Text("• $it", fontSize = 12.sp, color = LocalAppColors.current.textPrimary,
             lineHeight = 17.sp, modifier = Modifier.padding(bottom = 4.dp)) }
     }
 }

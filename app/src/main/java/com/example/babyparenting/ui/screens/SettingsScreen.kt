@@ -47,7 +47,7 @@ import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import com.example.babyparenting.ui.theme.AppColors
+import com.example.babyparenting.ui.theme.LocalAppColors
 import com.example.babyparenting.viewmodel.JourneyViewModel
 
 @Composable
@@ -60,19 +60,19 @@ fun SettingsScreen(viewModel: JourneyViewModel, onBack: () -> Unit, onLogout: ()
     var showLogout by remember { mutableStateOf(false) }
 
     Column(
-        modifier = Modifier.fillMaxWidth().background(AppColors.BgMain)
+        modifier = Modifier.fillMaxWidth().background(LocalAppColors.current.bgMain)
             .statusBarsPadding().navigationBarsPadding()
     ) {
         // Top bar
         Row(
             verticalAlignment = Alignment.CenterVertically,
-            modifier = Modifier.fillMaxWidth().background(AppColors.BgTopBar)
+            modifier = Modifier.fillMaxWidth().background(LocalAppColors.current.bgSurface)
                 .padding(end = 16.dp, top = 4.dp, bottom = 4.dp)
         ) {
             IconButton(onClick = onBack) {
-                Icon(Icons.AutoMirrored.Filled.ArrowBack, null, tint = AppColors.TextSecondary)
+                Icon(Icons.AutoMirrored.Filled.ArrowBack, null, tint = LocalAppColors.current.textSecondary)
             }
-            Text("Profile & Settings", fontSize = 18.sp, fontWeight = FontWeight.Bold, color = AppColors.TextPrimary)
+            Text("Profile & Settings", fontSize = 18.sp, fontWeight = FontWeight.Bold, color = LocalAppColors.current.textPrimary)
         }
 
         Column(
@@ -83,7 +83,7 @@ fun SettingsScreen(viewModel: JourneyViewModel, onBack: () -> Unit, onLogout: ()
             Box(
                 contentAlignment = Alignment.Center,
                 modifier = Modifier.fillMaxWidth().clip(RoundedCornerShape(16.dp))
-                    .background(Brush.linearGradient(listOf(AppColors.Coral, AppColors.Peach)))
+                    .background(Brush.linearGradient(listOf(LocalAppColors.current.coral, LocalAppColors.current.peach)))
                     .padding(24.dp)
             ) {
                 Column(horizontalAlignment = Alignment.CenterHorizontally) {
@@ -112,7 +112,7 @@ fun SettingsScreen(viewModel: JourneyViewModel, onBack: () -> Unit, onLogout: ()
 
             Column(
                 modifier = Modifier.fillMaxWidth().clip(RoundedCornerShape(14.dp))
-                    .background(AppColors.BgSurface).padding(16.dp),
+                    .background(LocalAppColors.current.bgSurface).padding(16.dp),
                 verticalArrangement = Arrangement.spacedBy(14.dp)
             ) {
                 SettingsField(nameInput, { nameInput = it; saved = false }, "Child's Name", Icons.Default.ChildCare)
@@ -121,7 +121,7 @@ fun SettingsScreen(viewModel: JourneyViewModel, onBack: () -> Unit, onLogout: ()
                 Button(
                     onClick = { viewModel.setChildName(nameInput.trim()); saved = true },
                     modifier = Modifier.fillMaxWidth().height(46.dp),
-                    colors   = ButtonDefaults.buttonColors(containerColor = AppColors.Coral),
+                    colors   = ButtonDefaults.buttonColors(containerColor = LocalAppColors.current.coral),
                     shape    = RoundedCornerShape(10.dp)
                 ) {
                     if (saved) {
@@ -138,7 +138,7 @@ fun SettingsScreen(viewModel: JourneyViewModel, onBack: () -> Unit, onLogout: ()
 
             Column(
                 modifier = Modifier.fillMaxWidth().clip(RoundedCornerShape(14.dp))
-                    .background(AppColors.BgSurface).padding(16.dp),
+                    .background(LocalAppColors.current.bgSurface).padding(16.dp),
                 verticalArrangement = Arrangement.spacedBy(10.dp)
             ) {
                 InfoRow("App Version", "1.0.0")
@@ -151,7 +151,7 @@ fun SettingsScreen(viewModel: JourneyViewModel, onBack: () -> Unit, onLogout: ()
             Button(
                 onClick = { showLogout = true },
                 modifier = Modifier.fillMaxWidth().height(50.dp),
-                colors   = ButtonDefaults.buttonColors(containerColor = AppColors.Red),
+                colors   = ButtonDefaults.buttonColors(containerColor = LocalAppColors.current.red),
                 shape    = RoundedCornerShape(12.dp)
             ) {
                 Icon(Icons.AutoMirrored.Filled.Logout, null, modifier = Modifier.size(18.dp), tint = Color.White)
@@ -166,47 +166,47 @@ fun SettingsScreen(viewModel: JourneyViewModel, onBack: () -> Unit, onLogout: ()
     if (showLogout) {
         AlertDialog(
             onDismissRequest = { showLogout = false },
-            containerColor   = AppColors.BgElevated,
+            containerColor   = LocalAppColors.current.bgElevated,
             shape            = RoundedCornerShape(16.dp),
-            title = { Text("Log Out?", fontWeight = FontWeight.Bold, color = AppColors.TextPrimary) },
+            title = { Text("Log Out?", fontWeight = FontWeight.Bold, color = LocalAppColors.current.textPrimary) },
             text  = { Text("You will be taken back to the login screen. Your progress is saved.",
-                fontSize = 13.sp, color = AppColors.TextSecondary) },
+                fontSize = 13.sp, color = LocalAppColors.current.textSecondary) },
             confirmButton = {
                 Button(onClick = { showLogout = false; onLogout() },
-                    colors = ButtonDefaults.buttonColors(containerColor = AppColors.Red)) {
+                    colors = ButtonDefaults.buttonColors(containerColor = LocalAppColors.current.red)) {
                     Text("Log Out", color = Color.White)
                 }
             },
-            dismissButton = { TextButton(onClick = { showLogout = false }) { Text("Cancel", color = AppColors.TextMuted) } }
+            dismissButton = { TextButton(onClick = { showLogout = false }) { Text("Cancel", color = LocalAppColors.current.textMuted) } }
         )
     }
 }
 
 @Composable private fun SectionLabel(label: String) {
     Text(label.uppercase(), fontSize = 11.sp, fontWeight = FontWeight.Bold,
-        color = AppColors.TextMuted, letterSpacing = 1.sp, modifier = Modifier.padding(start = 4.dp))
+        color = LocalAppColors.current.textMuted, letterSpacing = 1.sp, modifier = Modifier.padding(start = 4.dp))
 }
 
 @Composable private fun SettingsField(value: String, onChange: (String) -> Unit, label: String, icon: ImageVector) {
     OutlinedTextField(
         value = value, onValueChange = onChange,
         label = { Text(label) },
-        leadingIcon = { Icon(icon, null, tint = AppColors.Coral, modifier = Modifier.size(18.dp)) },
+        leadingIcon = { Icon(icon, null, tint = LocalAppColors.current.coral, modifier = Modifier.size(18.dp)) },
         singleLine = true, modifier = Modifier.fillMaxWidth(), shape = RoundedCornerShape(10.dp),
         colors = OutlinedTextFieldDefaults.colors(
-            focusedBorderColor = AppColors.Coral, unfocusedBorderColor = AppColors.Border,
-            focusedLabelColor = AppColors.Coral, unfocusedLabelColor = AppColors.TextMuted,
-            focusedTextColor = AppColors.TextPrimary, unfocusedTextColor = AppColors.TextPrimary,
-            focusedContainerColor = AppColors.BgSurface, unfocusedContainerColor = AppColors.BgSurface,
-            cursorColor = AppColors.Coral
+            focusedBorderColor = LocalAppColors.current.coral, unfocusedBorderColor = LocalAppColors.current.border,
+            focusedLabelColor = LocalAppColors.current.coral, unfocusedLabelColor = LocalAppColors.current.textMuted,
+            focusedTextColor = LocalAppColors.current.textPrimary, unfocusedTextColor = LocalAppColors.current.textPrimary,
+            focusedContainerColor = LocalAppColors.current.bgSurface, unfocusedContainerColor = LocalAppColors.current.bgSurface,
+            cursorColor = LocalAppColors.current.coral
         )
     )
 }
 
 @Composable private fun InfoRow(label: String, value: String) {
     Row(Modifier.fillMaxWidth(), Arrangement.SpaceBetween, Alignment.CenterVertically) {
-        Text(label, fontSize = 13.sp, color = AppColors.TextSecondary)
-        Text(value, fontSize = 13.sp, fontWeight = FontWeight.Medium, color = AppColors.TextPrimary)
+        Text(label, fontSize = 13.sp, color = LocalAppColors.current.textSecondary)
+        Text(value, fontSize = 13.sp, fontWeight = FontWeight.Medium, color = LocalAppColors.current.textPrimary)
     }
 }
 
