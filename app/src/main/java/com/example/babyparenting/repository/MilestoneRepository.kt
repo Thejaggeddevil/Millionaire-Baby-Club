@@ -55,7 +55,32 @@ class MilestoneRepository(private val context: Context) {
             for (groupId in 1..startGroup) {
                 loadGroupIfNeeded(groupId)
             }
-            mergeAndEmit()
+
+            // CRITICAL FIX: After loading, recalculate completed IDs from scratch
+            // based on the stored child age. Do NOT blindly read old SharedPreferences
+            // data — that causes stale completions from previous test sessions to persist.
+            //
+            // Rule: milestones STRICTLY BEFORE child's age are auto-completed.
+            // Milestones AT or AFTER child's age are NOT completed.
+            //
+            // Newborn (0 months) → ageMonths < 0 → nothing → 0 completions ✅
+            // 6 months → ageMonths < 6 → 0–5 month milestones auto-completed ✅
+            val correctIds = loadedMilestones
+                .filter { it.ageMonths < childAge }
+                .map { it.id }
+                .toSet()
+
+            // Merge: keep any IDs the user manually completed AND the age-based ones.
+            // This preserves real user progress (milestones they tapped Mark as Complete).
+            val savedIds    = getCompletedIds()
+            val validSaved  = savedIds.filter { id ->
+                loadedMilestones.any { it.id == id }
+            }.toSet()
+
+            val finalIds = (correctIds + validSaved).toSet()
+            saveCompletedIds(finalIds)
+
+            mergeAndEmitWithIds(finalIds)
         } catch (e: Exception) {
             _error.value = "Failed to load: ${e.localizedMessage}"
         } finally {
@@ -99,12 +124,22 @@ class MilestoneRepository(private val context: Context) {
 
     fun setChildAge(months: Int) {
         prefs.edit().putInt(KEY_AGE, months).apply()
-        val ids = getCompletedIds().toMutableSet()
-        // Auto-complete past milestones
-        loadedMilestones.filter { it.ageMonths <= months }.forEach { ids.add(it.id) }
-        saveCompletedIds(ids)
+
+        // RESET completedIds and recompute from scratch.
+        // This ensures changing age always gives a clean, correct state.
+        // We use STRICT less-than (<) so milestones AT the child's current age
+        // are NOT auto-completed — those are the ones they should do NOW.
+        //
+        // Example: Newborn (0 months) → nothing auto-completed (0 < 0 = false)
+        // Example: 6 months → milestones for 0–5 months auto-completed (ageMonths < 6)
+        val freshIds = loadedMilestones
+            .filter { it.ageMonths < months }   // strictly BEFORE child's age
+            .map { it.id }
+            .toMutableSet()
+
+        saveCompletedIds(freshIds)
         loadedMilestones = loadedMilestones.map {
-            it.copy(isCompleted = it.id in ids)
+            it.copy(isCompleted = it.id in freshIds)
         }.toMutableList()
         _milestones.value = loadedMilestones.toList()
         _progress.value   = buildProgress()
@@ -131,7 +166,10 @@ class MilestoneRepository(private val context: Context) {
 
     private fun mergeAndEmit() {
         val completed = getCompletedIds()
+        mergeAndEmitWithIds(completed)
+    }
 
+    private fun mergeAndEmitWithIds(completed: Set<String>) {
         val adminMs = adminStore.getAll().map { am ->
             Milestone(
                 id           = am.id,

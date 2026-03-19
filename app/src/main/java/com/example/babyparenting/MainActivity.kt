@@ -9,7 +9,6 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.ui.Modifier
 import com.example.babyparenting.navigation.AppNavigation
-import com.example.babyparenting.navigation.Routes
 import com.example.babyparenting.ui.theme.BabyParentingTheme
 
 class MainActivity : ComponentActivity() {
@@ -22,9 +21,9 @@ class MainActivity : ComponentActivity() {
                     modifier = Modifier.fillMaxSize(),
                     color    = MaterialTheme.colorScheme.background
                 ) {
-                    // Always start at Login screen
-                    // LoginScreen handles routing to Onboarding or Journey
-                    AppNavigation(startDestination = Routes.LOGIN)
+                    // AppNavigation handles session check internally
+                    // No startDestination needed here — it picks it from SessionManager
+                    AppNavigation()
                 }
             }
         }

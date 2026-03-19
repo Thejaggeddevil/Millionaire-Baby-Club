@@ -38,6 +38,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.example.babyparenting.data.model.AgeGroup
+import com.example.babyparenting.ui.theme.AppColors
 import kotlin.math.atan2
 
 // ── Section Header ─────────────────────────────────────────────────────────────
@@ -49,246 +50,142 @@ fun SectionHeader(group: AgeGroup, modifier: Modifier = Modifier) {
         verticalAlignment = Alignment.CenterVertically,
         modifier = modifier
             .clip(RoundedCornerShape(10.dp))
-            .background(accent.copy(alpha = 0.12f))
-            .border(1.dp, accent.copy(alpha = 0.28f), RoundedCornerShape(10.dp))
+            .background(AppColors.BgSurface)
+            .border(1.dp, accent.copy(alpha = 0.35f), RoundedCornerShape(10.dp))
             .padding(horizontal = 10.dp, vertical = 5.dp)
     ) {
-        Box(
-            modifier = Modifier
-                .size(8.dp)
-                .clip(CircleShape)
-                .background(accent)
-        )
+        Box(Modifier.size(8.dp).clip(CircleShape).background(accent))
         Spacer(Modifier.width(7.dp))
         Column {
-            Text(
-                text       = group.label,
-                fontSize   = 11.sp,
-                fontWeight = FontWeight.Bold,
-                color      = accent
-            )
-            Text(
-                text     = group.description,
-                fontSize = 9.sp,
-                color    = Color(0xFF777777),
-                maxLines = 1
-            )
+            Text(group.label, fontSize = 11.sp, fontWeight = FontWeight.Bold, color = accent)
+            Text(group.description, fontSize = 9.sp, color = AppColors.TextMuted, maxLines = 1)
         }
     }
 }
 
 // ── PathCanvas ────────────────────────────────────────────────────────────────
 
-/**
- * Draws the S-shaped journey path.
- * Completed segment = solid dark blue.
- * Remaining segment = dashed light blue.
- * Node dots show completion state.
- */
 @Composable
-fun PathCanvas(
-    nodePositions: List<Offset>,
-    completedCount: Int = 0,
-    modifier: Modifier = Modifier
-) {
+fun PathCanvas(nodePositions: List<Offset>, completedCount: Int = 0, modifier: Modifier = Modifier) {
     Canvas(modifier = modifier) {
         if (nodePositions.size < 2) return@Canvas
 
-        // Build full bezier path through all nodes
         val fullPath = Path()
         fullPath.moveTo(nodePositions[0].x, nodePositions[0].y)
         for (i in 0 until nodePositions.size - 1) {
-            val cur  = nodePositions[i]
-            val next = nodePositions[i + 1]
+            val cur = nodePositions[i]; val next = nodePositions[i + 1]
             val midY = (cur.y + next.y) / 2f
             fullPath.cubicTo(cur.x, midY, next.x, midY, next.x, next.y)
         }
 
-        // Measure for completed/remaining split
-        val measure = PathMeasure()
-        measure.setPath(fullPath, false)
-        val totalLen  = measure.length
-        val fraction  = if (nodePositions.size > 1)
-            (completedCount.toFloat() / (nodePositions.size - 1f)).coerceIn(0f, 1f) else 0f
-        val splitAt   = totalLen * fraction
+        val measure  = PathMeasure().also { it.setPath(fullPath, false) }
+        val totalLen = measure.length
+        val fraction = (completedCount.toFloat() / (nodePositions.size - 1f)).coerceIn(0f, 1f)
+        val splitAt  = totalLen * fraction
 
-        // Glow behind entire path
-        drawPath(
-            fullPath,
-            Color(0xFFBBDEFB).copy(alpha = 0.28f),
-            style = Stroke(20f, cap = StrokeCap.Round, join = StrokeJoin.Round)
-        )
+        // Glow
+        drawPath(fullPath, AppColors.PathBlue.copy(alpha = 0.12f),
+            style = Stroke(18f, cap = StrokeCap.Round, join = StrokeJoin.Round))
 
-        // Future dashed light blue
-        drawPath(
-            fullPath,
-            Color(0xFF90CAF9),
-            style = Stroke(
-                width      = 3.5f,
-                cap        = StrokeCap.Round,
-                join       = StrokeJoin.Round,
-                pathEffect = PathEffect.dashPathEffect(floatArrayOf(14f, 9f), 0f)
-            )
-        )
+        // Future dashed
+        drawPath(fullPath, AppColors.PathFaint,
+            style = Stroke(3.5f, cap = StrokeCap.Round, join = StrokeJoin.Round,
+                pathEffect = PathEffect.dashPathEffect(floatArrayOf(14f, 9f))))
 
-        // Completed solid blue
+        // Completed solid
         if (fraction > 0f) {
             val donePath = Path()
             measure.getSegment(0f, splitAt, donePath, true)
-            drawPath(
-                donePath,
-                Color(0xFF1565C0),
-                style = Stroke(5f, cap = StrokeCap.Round, join = StrokeJoin.Round)
-            )
+            drawPath(donePath, AppColors.PathBlue,
+                style = Stroke(5f, cap = StrokeCap.Round, join = StrokeJoin.Round))
         }
 
         // Node dots
         nodePositions.forEachIndexed { idx, pos ->
             val done = idx < completedCount
-            drawCircle(if (done) Color(0xFF1565C0) else Color(0xFF90CAF9), 10f, pos)
-            drawCircle(if (done) Color.White else Color(0xFFE3F2FD), 5.5f, pos)
+            drawCircle(if (done) AppColors.PathBlue else AppColors.Border, 10f, pos)
+            drawCircle(if (done) Color.White.copy(alpha = 0.9f) else AppColors.BgSurface, 5.5f, pos)
         }
     }
 }
 
 // ── FootstepsLayer ────────────────────────────────────────────────────────────
 
-/**
- * Marauder's Map style footprints.
- * Completed segments → static visible footprints (path already walked).
- * Active segment     → animated wave of appearing footprints.
- * Future segments    → faint ghost outline.
- */
 @Composable
-fun FootstepsLayer(
-    nodePositions: List<Offset>,
-    completedCount: Int,
-    modifier: Modifier = Modifier
-) {
+fun FootstepsLayer(nodePositions: List<Offset>, completedCount: Int, modifier: Modifier = Modifier) {
     if (nodePositions.size < 2) return
 
     val transition = rememberInfiniteTransition(label = "marauder")
     val progress by transition.animateFloat(
-        initialValue  = 0f,
-        targetValue   = 1f,
-        animationSpec = infiniteRepeatable(
-            animation  = tween(2400, easing = LinearEasing),
-            repeatMode = RepeatMode.Restart
-        ),
+        0f, 1f,
+        infiniteRepeatable(tween(2400, easing = LinearEasing), RepeatMode.Restart),
         label = "wave"
     )
 
     Canvas(modifier = modifier) {
         for (seg in 0 until nodePositions.size - 1) {
             when {
-                seg < completedCount  -> drawStaticFootprints(
-                    nodePositions[seg], nodePositions[seg + 1],
-                    Color(0xFF1565C0).copy(alpha = 0.65f)
-                )
-                seg == completedCount -> drawAnimatedFootprints(
-                    nodePositions[seg], nodePositions[seg + 1],
-                    progress, Color(0xFF1976D2)
-                )
-                else                  -> drawStaticFootprints(
-                    nodePositions[seg], nodePositions[seg + 1],
-                    Color(0xFF90CAF9).copy(alpha = 0.20f)
-                )
+                seg < completedCount  -> drawStaticFootprints(nodePositions[seg], nodePositions[seg + 1], AppColors.PathBlue.copy(alpha = 0.55f))
+                seg == completedCount -> drawAnimatedFootprints(nodePositions[seg], nodePositions[seg + 1], progress, AppColors.Coral)
+                else                  -> drawStaticFootprints(nodePositions[seg], nodePositions[seg + 1], AppColors.Border.copy(alpha = 0.35f))
             }
         }
     }
 }
 
-// ── Static footprints ─────────────────────────────────────────────────────────
-
 private fun DrawScope.drawStaticFootprints(start: Offset, end: Offset, color: Color) {
     val angleRad = atan2((end.y - start.y), (end.x - start.x))
     val angleDeg = Math.toDegrees(angleRad.toDouble()).toFloat()
-    val perpX    = -kotlin.math.sin(angleRad).toFloat()
-    val perpY    =  kotlin.math.cos(angleRad).toFloat()
+    val perpX = -kotlin.math.sin(angleRad).toFloat()
+    val perpY =  kotlin.math.cos(angleRad).toFloat()
     for (i in 0 until 5) {
-        val t    = (i + 1f) / 6f
-        val sign = if (i % 2 == 0) 1f else -1f
-        val cx   = lerp(start.x, end.x, t) + perpX * 20f * sign
-        val cy   = lerp(start.y, end.y, t) + perpY * 20f * sign
-        rotate(angleDeg + 90f, Offset(cx, cy)) {
-            drawFootprint(Offset(cx, cy), 16f, color, i % 2 == 0)
-        }
+        val t = (i + 1f) / 6f; val sign = if (i % 2 == 0) 1f else -1f
+        val cx = lerp(start.x, end.x, t) + perpX * 20f * sign
+        val cy = lerp(start.y, end.y, t) + perpY * 20f * sign
+        rotate(angleDeg + 90f, Offset(cx, cy)) { drawFootprint(Offset(cx, cy), 16f, color, i % 2 == 0) }
     }
 }
 
-// ── Animated footprints ───────────────────────────────────────────────────────
-
-private fun DrawScope.drawAnimatedFootprints(
-    start: Offset,
-    end: Offset,
-    progress: Float,
-    color: Color
-) {
+private fun DrawScope.drawAnimatedFootprints(start: Offset, end: Offset, progress: Float, color: Color) {
     val angleRad = atan2((end.y - start.y), (end.x - start.x))
     val angleDeg = Math.toDegrees(angleRad.toDouble()).toFloat()
-    val perpX    = -kotlin.math.sin(angleRad).toFloat()
-    val perpY    =  kotlin.math.cos(angleRad).toFloat()
+    val perpX = -kotlin.math.sin(angleRad).toFloat()
+    val perpY =  kotlin.math.cos(angleRad).toFloat()
     for (i in 0 until 5) {
-        val t     = (i + 1f) / 6f
-        val alpha = waveAlpha(progress, t * 0.75f)
+        val t = (i + 1f) / 6f
+        val alpha = waveAlpha(progress, t * 0.75f).coerceIn(0f, 1f)
         if (alpha <= 0f) continue
         val sign = if (i % 2 == 0) 1f else -1f
-        val cx   = lerp(start.x, end.x, t) + perpX * 20f * sign
-        val cy   = lerp(start.y, end.y, t) + perpY * 20f * sign
-        // Glow ring
-        drawCircle(color.copy(alpha = alpha * 0.20f), 26f, Offset(cx, cy))
-        rotate(angleDeg + 90f, Offset(cx, cy)) {
-            drawFootprint(Offset(cx, cy), 16f, color.copy(alpha = alpha * 0.90f), i % 2 == 0)
-        }
+        val cx = lerp(start.x, end.x, t) + perpX * 20f * sign
+        val cy = lerp(start.y, end.y, t) + perpY * 20f * sign
+        drawCircle(color.copy(alpha = alpha * 0.18f), 26f, Offset(cx, cy))
+        rotate(angleDeg + 90f, Offset(cx, cy)) { drawFootprint(Offset(cx, cy), 16f, color.copy(alpha = alpha * 0.90f), i % 2 == 0) }
     }
 }
 
-private fun waveAlpha(progress: Float, phase: Float): Float {
-    val w       = 0.35f
-    val shifted = ((progress - phase) + 1f) % 1f
+private fun waveAlpha(p: Float, phase: Float): Float {
+    val w = 0.35f; val s = ((p - phase) + 1f) % 1f
     return when {
-        shifted < 0.06f         -> shifted / 0.06f
-        shifted < w - 0.06f    -> 1f
-        shifted < w            -> 1f - (shifted - (w - 0.06f)) / 0.06f
-        else                   -> 0f
+        s < 0.06f       -> s / 0.06f
+        s < w - 0.06f  -> 1f
+        s < w          -> 1f - (s - (w - 0.06f)) / 0.06f
+        else           -> 0f
     }.coerceIn(0f, 1f)
 }
 
-// ── Single footprint shape ────────────────────────────────────────────────────
-
-private fun DrawScope.drawFootprint(
-    center: Offset,
-    size: Float,
-    color: Color,
-    isRight: Boolean
-) {
-    val f = if (isRight) 1f else -1f
-    // Heel
+private fun DrawScope.drawFootprint(center: Offset, size: Float, color: Color, right: Boolean) {
+    val f = if (right) 1f else -1f
     drawCircle(color, size * 0.44f, Offset(center.x + f * size * 0.08f, center.y + size * 0.32f))
-    // Ball
     drawCircle(color, size * 0.32f, Offset(center.x - f * size * 0.05f, center.y - size * 0.04f))
-    // 4 toes
     listOf(
         Offset(-size * 0.30f, -size * 0.46f),
         Offset(-size * 0.10f, -size * 0.54f),
         Offset( size * 0.12f, -size * 0.50f),
         Offset( size * 0.30f, -size * 0.38f)
-    ).forEach { t ->
-        drawCircle(color, size * 0.14f, Offset(center.x + f * t.x, center.y + t.y))
-    }
+    ).forEach { t -> drawCircle(color, size * 0.14f, Offset(center.x + f * t.x, center.y + t.y)) }
 }
 
-// ── Node positions ────────────────────────────────────────────────────────────
-
-/**
- * Computes pixel positions for [count] nodes, alternating
- * left 28% / right 72% inside the canvas, evenly spaced vertically.
- */
-fun computeNodePositions(
-    count: Int,
-    canvasWidthPx: Float,
-    canvasHeightPx: Float
-): List<Offset> {
+fun computeNodePositions(count: Int, canvasWidthPx: Float, canvasHeightPx: Float): List<Offset> {
     if (count == 0) return emptyList()
     val segH = canvasHeightPx / (count + 1).toFloat()
     return (0 until count).map { i ->
@@ -298,7 +195,5 @@ fun computeNodePositions(
         )
     }
 }
-
-// ── Helpers ───────────────────────────────────────────────────────────────────
 
 private fun lerp(a: Float, b: Float, t: Float) = a + (b - a) * t

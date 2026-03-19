@@ -7,7 +7,6 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
-import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.navigationBarsPadding
@@ -25,7 +24,6 @@ import androidx.compose.material.icons.automirrored.filled.Logout
 import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.ChildCare
 import androidx.compose.material.icons.filled.Email
-import androidx.compose.material.icons.filled.Person
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
@@ -49,136 +47,81 @@ import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.example.babyparenting.ui.theme.AppColors
 import com.example.babyparenting.viewmodel.JourneyViewModel
 
 @Composable
-fun SettingsScreen(
-    viewModel: JourneyViewModel,
-    onBack: () -> Unit,
-    onLogout: () -> Unit
-) {
-    val childName     = viewModel.getChildName()
-    val childAge      = viewModel.getChildAgeMonths()
-
-    var nameInput     by remember { mutableStateOf(childName) }
-    var emailInput    by remember { mutableStateOf("") }
-    var saved         by remember { mutableStateOf(false) }
-    var showLogout    by remember { mutableStateOf(false) }
+fun SettingsScreen(viewModel: JourneyViewModel, onBack: () -> Unit, onLogout: () -> Unit) {
+    val childName  = viewModel.getChildName()
+    val childAge   = viewModel.getChildAgeMonths()
+    var nameInput  by remember { mutableStateOf(childName) }
+    var emailInput by remember { mutableStateOf("") }
+    var saved      by remember { mutableStateOf(false) }
+    var showLogout by remember { mutableStateOf(false) }
 
     Column(
-        modifier = Modifier
-            .fillMaxSize()
-            .background(Color(0xFFF5F0EB))
-            .statusBarsPadding()
-            .navigationBarsPadding()
+        modifier = Modifier.fillMaxWidth().background(AppColors.BgMain)
+            .statusBarsPadding().navigationBarsPadding()
     ) {
-        // ── Top bar ──────────────────────────────────────────────────────────
+        // Top bar
         Row(
             verticalAlignment = Alignment.CenterVertically,
-            modifier          = Modifier
-                .fillMaxWidth()
-                .background(Color.White)
+            modifier = Modifier.fillMaxWidth().background(AppColors.BgTopBar)
                 .padding(end = 16.dp, top = 4.dp, bottom = 4.dp)
         ) {
             IconButton(onClick = onBack) {
-                Icon(
-                    Icons.AutoMirrored.Filled.ArrowBack,
-                    contentDescription = "Back",
-                    tint               = Color(0xFF5C3D2E)
-                )
+                Icon(Icons.AutoMirrored.Filled.ArrowBack, null, tint = AppColors.TextSecondary)
             }
-            Text(
-                "Profile & Settings",
-                fontSize   = 18.sp,
-                fontWeight = FontWeight.Bold,
-                color      = Color(0xFF2D1B0E)
-            )
+            Text("Profile & Settings", fontSize = 18.sp, fontWeight = FontWeight.Bold, color = AppColors.TextPrimary)
         }
 
         Column(
-            modifier = Modifier
-                .fillMaxSize()
-                .verticalScroll(rememberScrollState())
-                .padding(16.dp),
+            modifier = Modifier.fillMaxWidth().verticalScroll(rememberScrollState()).padding(16.dp),
             verticalArrangement = Arrangement.spacedBy(14.dp)
         ) {
-            // ── Avatar / profile summary ──────────────────────────────────────
+            // Avatar card
             Box(
                 contentAlignment = Alignment.Center,
-                modifier         = Modifier
-                    .fillMaxWidth()
-                    .clip(RoundedCornerShape(16.dp))
-                    .background(
-                        Brush.linearGradient(
-                            listOf(Color(0xFFFF8B94), Color(0xFFFFB06A))
-                        )
-                    )
+                modifier = Modifier.fillMaxWidth().clip(RoundedCornerShape(16.dp))
+                    .background(Brush.linearGradient(listOf(AppColors.Coral, AppColors.Peach)))
                     .padding(24.dp)
             ) {
                 Column(horizontalAlignment = Alignment.CenterHorizontally) {
                     Box(
                         contentAlignment = Alignment.Center,
-                        modifier         = Modifier
-                            .size(70.dp)
-                            .clip(CircleShape)
-                            .background(Color.White.copy(alpha = 0.25f))
+                        modifier = Modifier.size(70.dp).clip(CircleShape).background(Color.White.copy(alpha = 0.22f))
                     ) {
                         Text(
-                            text     = if (nameInput.isNotBlank()) nameInput.first().uppercase() else "P",
-                            fontSize = 28.sp,
-                            fontWeight = FontWeight.Bold,
-                            color      = Color.White
+                            text = if (nameInput.isNotBlank()) nameInput.first().uppercase() else "P",
+                            fontSize = 28.sp, fontWeight = FontWeight.Bold, color = Color.White
                         )
                     }
                     Spacer(Modifier.height(10.dp))
                     Text(
-                        text       = if (nameInput.isNotBlank()) "$nameInput's Parent" else "Parent",
-                        fontSize   = 16.sp,
-                        fontWeight = FontWeight.Bold,
-                        color      = Color.White
+                        if (nameInput.isNotBlank()) "$nameInput's Parent" else "Parent",
+                        fontSize = 16.sp, fontWeight = FontWeight.Bold, color = Color.White
                     )
                     if (childAge > 0) {
                         Spacer(Modifier.height(4.dp))
-                        Text(
-                            text    = "Child age: ${formatChildAge(childAge)}",
-                            fontSize = 12.sp,
-                            color   = Color.White.copy(alpha = 0.85f)
-                        )
+                        Text("Child age: ${formatChildAge(childAge)}", fontSize = 12.sp, color = Color.White.copy(0.85f))
                     }
                 }
             }
 
-            // ── Edit profile ──────────────────────────────────────────────────
             SectionLabel("Edit Profile")
 
             Column(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .clip(RoundedCornerShape(14.dp))
-                    .background(Color.White)
-                    .padding(16.dp),
+                modifier = Modifier.fillMaxWidth().clip(RoundedCornerShape(14.dp))
+                    .background(AppColors.BgSurface).padding(16.dp),
                 verticalArrangement = Arrangement.spacedBy(14.dp)
             ) {
-                SettingsTextField(
-                    value         = nameInput,
-                    onValueChange = { nameInput = it; saved = false },
-                    label         = "Child's Name",
-                    leadingIcon   = Icons.Default.ChildCare
-                )
-                SettingsTextField(
-                    value         = emailInput,
-                    onValueChange = { emailInput = it; saved = false },
-                    label         = "Your Email (optional)",
-                    leadingIcon   = Icons.Default.Email
-                )
+                SettingsField(nameInput, { nameInput = it; saved = false }, "Child's Name", Icons.Default.ChildCare)
+                SettingsField(emailInput, { emailInput = it; saved = false }, "Your Email (optional)", Icons.Default.Email)
 
                 Button(
-                    onClick = {
-                        viewModel.setChildName(nameInput.trim())
-                        saved = true
-                    },
+                    onClick = { viewModel.setChildName(nameInput.trim()); saved = true },
                     modifier = Modifier.fillMaxWidth().height(46.dp),
-                    colors   = ButtonDefaults.buttonColors(containerColor = Color(0xFFFF8B94)),
+                    colors   = ButtonDefaults.buttonColors(containerColor = AppColors.Coral),
                     shape    = RoundedCornerShape(10.dp)
                 ) {
                     if (saved) {
@@ -191,15 +134,11 @@ fun SettingsScreen(
                 }
             }
 
-            // ── App info ──────────────────────────────────────────────────────
             SectionLabel("About")
 
             Column(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .clip(RoundedCornerShape(14.dp))
-                    .background(Color.White)
-                    .padding(16.dp),
+                modifier = Modifier.fillMaxWidth().clip(RoundedCornerShape(14.dp))
+                    .background(AppColors.BgSurface).padding(16.dp),
                 verticalArrangement = Arrangement.spacedBy(10.dp)
             ) {
                 InfoRow("App Version", "1.0.0")
@@ -207,21 +146,15 @@ fun SettingsScreen(
                 InfoRow("Total Milestones", "76,000+ activities")
             }
 
-            // ── Logout ────────────────────────────────────────────────────────
             SectionLabel("Account")
 
             Button(
                 onClick = { showLogout = true },
                 modifier = Modifier.fillMaxWidth().height(50.dp),
-                colors   = ButtonDefaults.buttonColors(containerColor = Color(0xFFE53935)),
+                colors   = ButtonDefaults.buttonColors(containerColor = AppColors.Red),
                 shape    = RoundedCornerShape(12.dp)
             ) {
-                Icon(
-                    Icons.AutoMirrored.Filled.Logout,
-                    contentDescription = null,
-                    modifier           = Modifier.size(18.dp),
-                    tint               = Color.White
-                )
+                Icon(Icons.AutoMirrored.Filled.Logout, null, modifier = Modifier.size(18.dp), tint = Color.White)
                 Spacer(Modifier.width(8.dp))
                 Text("Log Out", color = Color.White, fontWeight = FontWeight.SemiBold, fontSize = 15.sp)
             }
@@ -230,82 +163,50 @@ fun SettingsScreen(
         }
     }
 
-    // ── Logout confirmation dialog ────────────────────────────────────────────
     if (showLogout) {
         AlertDialog(
             onDismissRequest = { showLogout = false },
-            containerColor   = Color.White,
+            containerColor   = AppColors.BgElevated,
             shape            = RoundedCornerShape(16.dp),
-            title = { Text("Log Out?", fontWeight = FontWeight.Bold) },
-            text  = {
-                Text(
-                    "You will be taken back to the login screen. Your progress is saved.",
-                    fontSize = 13.sp,
-                    color    = Color(0xFF555555)
-                )
-            },
+            title = { Text("Log Out?", fontWeight = FontWeight.Bold, color = AppColors.TextPrimary) },
+            text  = { Text("You will be taken back to the login screen. Your progress is saved.",
+                fontSize = 13.sp, color = AppColors.TextSecondary) },
             confirmButton = {
-                Button(
-                    onClick = { showLogout = false; onLogout() },
-                    colors  = ButtonDefaults.buttonColors(containerColor = Color(0xFFE53935))
-                ) { Text("Log Out", color = Color.White) }
+                Button(onClick = { showLogout = false; onLogout() },
+                    colors = ButtonDefaults.buttonColors(containerColor = AppColors.Red)) {
+                    Text("Log Out", color = Color.White)
+                }
             },
-            dismissButton = {
-                TextButton(onClick = { showLogout = false }) { Text("Cancel") }
-            }
+            dismissButton = { TextButton(onClick = { showLogout = false }) { Text("Cancel", color = AppColors.TextMuted) } }
         )
     }
 }
 
-// ── Sub-components ────────────────────────────────────────────────────────────
-
-@Composable
-private fun SectionLabel(label: String) {
-    Text(
-        text       = label.uppercase(),
-        fontSize   = 11.sp,
-        fontWeight = FontWeight.Bold,
-        color      = Color(0xFF9E9E9E),
-        letterSpacing = 1.sp,
-        modifier   = Modifier.padding(start = 4.dp)
-    )
+@Composable private fun SectionLabel(label: String) {
+    Text(label.uppercase(), fontSize = 11.sp, fontWeight = FontWeight.Bold,
+        color = AppColors.TextMuted, letterSpacing = 1.sp, modifier = Modifier.padding(start = 4.dp))
 }
 
-@Composable
-private fun SettingsTextField(
-    value: String,
-    onValueChange: (String) -> Unit,
-    label: String,
-    leadingIcon: ImageVector
-) {
+@Composable private fun SettingsField(value: String, onChange: (String) -> Unit, label: String, icon: ImageVector) {
     OutlinedTextField(
-        value         = value,
-        onValueChange = onValueChange,
-        label         = { Text(label) },
-        leadingIcon   = {
-            Icon(leadingIcon, null, tint = Color(0xFFFF8B94), modifier = Modifier.size(18.dp))
-        },
-        singleLine = true,
-        modifier   = Modifier.fillMaxWidth(),
-        shape      = RoundedCornerShape(10.dp),
-        colors     = OutlinedTextFieldDefaults.colors(
-            focusedBorderColor   = Color(0xFFFF8B94),
-            unfocusedBorderColor = Color(0xFFDDDDDD),
-            focusedLabelColor    = Color(0xFFFF8B94),
-            cursorColor          = Color(0xFFFF8B94)
+        value = value, onValueChange = onChange,
+        label = { Text(label) },
+        leadingIcon = { Icon(icon, null, tint = AppColors.Coral, modifier = Modifier.size(18.dp)) },
+        singleLine = true, modifier = Modifier.fillMaxWidth(), shape = RoundedCornerShape(10.dp),
+        colors = OutlinedTextFieldDefaults.colors(
+            focusedBorderColor = AppColors.Coral, unfocusedBorderColor = AppColors.Border,
+            focusedLabelColor = AppColors.Coral, unfocusedLabelColor = AppColors.TextMuted,
+            focusedTextColor = AppColors.TextPrimary, unfocusedTextColor = AppColors.TextPrimary,
+            focusedContainerColor = AppColors.BgSurface, unfocusedContainerColor = AppColors.BgSurface,
+            cursorColor = AppColors.Coral
         )
     )
 }
 
-@Composable
-private fun InfoRow(label: String, value: String) {
-    Row(
-        Modifier.fillMaxWidth(),
-        Arrangement.SpaceBetween,
-        Alignment.CenterVertically
-    ) {
-        Text(label, fontSize = 13.sp, color = Color(0xFF777777))
-        Text(value, fontSize = 13.sp, fontWeight = FontWeight.Medium, color = Color(0xFF2D1B0E))
+@Composable private fun InfoRow(label: String, value: String) {
+    Row(Modifier.fillMaxWidth(), Arrangement.SpaceBetween, Alignment.CenterVertically) {
+        Text(label, fontSize = 13.sp, color = AppColors.TextSecondary)
+        Text(value, fontSize = 13.sp, fontWeight = FontWeight.Medium, color = AppColors.TextPrimary)
     }
 }
 

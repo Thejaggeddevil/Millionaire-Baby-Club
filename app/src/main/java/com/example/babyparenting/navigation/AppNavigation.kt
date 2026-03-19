@@ -1,45 +1,60 @@
 package com.example.babyparenting.navigation
 
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.remember
+import androidx.compose.ui.platform.LocalContext
 import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.navigation.NavHostController
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.rememberNavController
+import com.example.babyparenting.data.local.SessionManager
 import com.example.babyparenting.ui.screens.AdminPanelScreen
 import com.example.babyparenting.ui.screens.AdviceScreen
 import com.example.babyparenting.ui.screens.BabyJourneyScreen
 import com.example.babyparenting.ui.screens.LoginScreen
 import com.example.babyparenting.ui.screens.OnboardingScreen
+import com.example.babyparenting.ui.screens.ParentGuideDetailScreen
+import com.example.babyparenting.ui.screens.ParentHubScreen
 import com.example.babyparenting.ui.screens.SettingsScreen
 import com.example.babyparenting.viewmodel.AdminViewModel
 import com.example.babyparenting.viewmodel.JourneyViewModel
+import com.example.babyparenting.viewmodel.ParentViewModel
 
 object Routes {
-    const val LOGIN      = "login"
-    const val ONBOARDING = "onboarding"
-    const val JOURNEY    = "journey"
-    const val ADVICE     = "advice"
-    const val SETTINGS   = "settings"
-    const val ADMIN      = "admin"
+    const val LOGIN        = "login"
+    const val ONBOARDING   = "onboarding"
+    const val JOURNEY      = "journey"
+    const val ADVICE       = "advice"
+    const val SETTINGS     = "settings"
+    const val ADMIN        = "admin"
+    const val PARENT_HUB   = "parent_hub"
+    const val PARENT_DETAIL = "parent_detail"
 }
 
 @Composable
 fun AppNavigation(
-    navController: NavHostController = rememberNavController(),
-    startDestination: String = Routes.LOGIN
+    navController: NavHostController = rememberNavController()
 ) {
+    val context    = LocalContext.current
+    val session    = remember { SessionManager(context) }
     val journeyVm: JourneyViewModel = viewModel()
     val adminVm:   AdminViewModel   = viewModel()
+    val parentVm:  ParentViewModel  = viewModel()
+
+    val startDestination = when {
+        session.isLoggedIn() && journeyVm.getChildName().isNotBlank() -> Routes.JOURNEY
+        session.isLoggedIn()                                          -> Routes.ONBOARDING
+        else                                                          -> Routes.LOGIN
+    }
 
     NavHost(navController = navController, startDestination = startDestination) {
 
-        // ── Login — always the entry point ────────────────────────────────────
+        // ── Login ─────────────────────────────────────────────────────────────
         composable(Routes.LOGIN) {
             LoginScreen(
                 onParentLogin = {
-                    // Always allow entry — Firebase auth will be added later
-                    // For now: if name set → go to journey, else onboarding
+                    session.setLoggedIn(true)
                     val hasProfile = journeyVm.getChildName().isNotBlank()
                     if (hasProfile) {
                         navController.navigate(Routes.JOURNEY) {
@@ -63,7 +78,7 @@ fun AppNavigation(
             )
         }
 
-        // ── Onboarding — first-time parents only ──────────────────────────────
+        // ── Onboarding ────────────────────────────────────────────────────────
         composable(Routes.ONBOARDING) {
             OnboardingScreen(
                 onComplete = { name, ageMonths ->
@@ -79,18 +94,17 @@ fun AppNavigation(
         // ── Journey map ───────────────────────────────────────────────────────
         composable(Routes.JOURNEY) {
             BabyJourneyScreen(
-                viewModel        = journeyVm,
+                viewModel         = journeyVm,
                 onMilestoneTapped = { milestone ->
                     journeyVm.onMilestoneTapped(milestone)
                     navController.navigate(Routes.ADVICE)
                 },
-                onSettingsTapped = {
-                    navController.navigate(Routes.SETTINGS)
-                }
+                onSettingsTapped  = { navController.navigate(Routes.SETTINGS) },
+                onParentHubTapped = { navController.navigate(Routes.PARENT_HUB) }
             )
         }
 
-        // ── Advice detail ─────────────────────────────────────────────────────
+        // ── Advice ────────────────────────────────────────────────────────────
         composable(Routes.ADVICE) {
             AdviceScreen(
                 viewModel = journeyVm,
@@ -101,18 +115,47 @@ fun AppNavigation(
             )
         }
 
-        // ── Settings / profile ────────────────────────────────────────────────
+        // ── Settings ──────────────────────────────────────────────────────────
         composable(Routes.SETTINGS) {
             SettingsScreen(
                 viewModel = journeyVm,
                 onBack    = { navController.popBackStack() },
                 onLogout  = {
-                    // Clear and go to login
+                    session.logout()
                     navController.navigate(Routes.LOGIN) {
                         popUpTo(0) { inclusive = true }
                     }
                 }
             )
+        }
+
+        // ── Parent Hub ────────────────────────────────────────────────────────
+        composable(Routes.PARENT_HUB) {
+            ParentHubScreen(
+                viewModel       = parentVm,
+                onBack          = { navController.popBackStack() },
+                onGuideSelected = { guide ->
+                    parentVm.openGuide(guide)
+                    navController.navigate(Routes.PARENT_DETAIL)
+                }
+            )
+        }
+
+        // ── Parent Guide Detail ───────────────────────────────────────────────
+        composable(Routes.PARENT_DETAIL) {
+            val guide = parentVm.selectedGuide.value
+            if (guide != null) {
+                ParentGuideDetailScreen(
+                    guide  = guide,
+                    onBack = {
+                        parentVm.closeGuide()
+                        navController.popBackStack()
+                    }
+                )
+            } else {
+                // Fallback if state lost
+                navController.popBackStack()
+            }
         }
 
         // ── Admin panel ───────────────────────────────────────────────────────
@@ -121,7 +164,6 @@ fun AppNavigation(
                 viewModel = adminVm,
                 onBack    = {
                     journeyVm.refreshAfterAdminEdit()
-                    // Admin goes back to login (they don't see parent journey)
                     navController.navigate(Routes.LOGIN) {
                         popUpTo(0) { inclusive = true }
                     }

@@ -44,6 +44,7 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.example.babyparenting.data.model.Milestone
+import com.example.babyparenting.ui.theme.AppColors
 import kotlinx.coroutines.delay
 
 @Composable
@@ -55,59 +56,36 @@ fun MilestoneCard(
     onToggleCompletion: () -> Unit,
     modifier: Modifier = Modifier
 ) {
-    // ── Entrance animation ────────────────────────────────────────────────────
     var visible by remember { mutableStateOf(false) }
-    LaunchedEffect(Unit) {
-        delay(index * 60L + 150L)
-        visible = true
-    }
+    LaunchedEffect(Unit) { delay(index * 60L + 150L); visible = true }
+
     val entranceScale by animateFloatAsState(
-        targetValue   = if (visible) 1f else 0.5f,
-        animationSpec = spring(Spring.DampingRatioMediumBouncy, Spring.StiffnessLow),
-        label         = "scale$index"
-    )
+        if (visible) 1f else 0.5f, spring(Spring.DampingRatioMediumBouncy, Spring.StiffnessLow), label = "s")
     val entranceAlpha by animateFloatAsState(
-        targetValue   = if (visible) 1f else 0f,
-        animationSpec = spring(stiffness = Spring.StiffnessMedium),
-        label         = "alpha$index"
-    )
+        if (visible) 1f else 0f, spring(stiffness = Spring.StiffnessMedium), label = "a")
 
-    // ── Press animation ───────────────────────────────────────────────────────
     val interactionSource = remember { MutableInteractionSource() }
-    val pressed           by interactionSource.collectIsPressedAsState()
-    val pressScale        by animateFloatAsState(
-        targetValue   = if (pressed && !isLocked) 0.95f else 1f,
-        animationSpec = spring(Spring.DampingRatioMediumBouncy, Spring.StiffnessMedium),
-        label         = "press$index"
-    )
-
-    // ── Lock fade animation ───────────────────────────────────────────────────
+    val pressed by interactionSource.collectIsPressedAsState()
+    val pressScale by animateFloatAsState(
+        if (pressed && !isLocked) 0.95f else 1f,
+        spring(Spring.DampingRatioMediumBouncy, Spring.StiffnessMedium), label = "p")
     val lockedAlpha by animateFloatAsState(
-        targetValue   = if (isLocked) 0.52f else 1f,
-        animationSpec = tween(350),
-        label         = "locked$index"
-    )
+        if (isLocked) 0.45f else 1f, tween(350), label = "l")
 
-    // ── Colors ────────────────────────────────────────────────────────────────
-    val trueAccent    = Color(milestone.accentColor)
-    val accentColor   = if (isLocked) Color(0xFF9E9E9E) else trueAccent
-    val isDone        = milestone.isCompleted
-    val shape         = RoundedCornerShape(14.dp)
+    val trueAccent  = Color(milestone.accentColor)
+    val accentColor = if (isLocked) AppColors.Locked else trueAccent
+    val isDone      = milestone.isCompleted
+    val shape       = RoundedCornerShape(14.dp)
 
     val cardBg = when {
-        isLocked -> Color(0xFFF2F2F6)
-        isDone   -> trueAccent.copy(alpha = 0.09f)
-        else     -> Color.White
+        isLocked -> AppColors.BgSurface.copy(alpha = 0.6f)
+        isDone   -> AppColors.BgSurface
+        else     -> AppColors.BgSurface
     }
     val borderColor = when {
-        isLocked -> Color(0xFFCCCCDD)
-        isDone   -> trueAccent.copy(alpha = 0.45f)
-        else     -> Color(0xFFEEEEEE)
-    }
-    val circleBg = when {
-        isLocked -> Color(0xFFDDDDEE)
-        isDone   -> trueAccent
-        else     -> trueAccent.copy(alpha = 0.14f)
+        isLocked -> AppColors.Border.copy(alpha = 0.5f)
+        isDone   -> trueAccent.copy(alpha = 0.55f)
+        else     -> AppColors.Border
     }
 
     Column(
@@ -115,79 +93,52 @@ fun MilestoneCard(
             .scale(entranceScale * pressScale)
             .alpha(entranceAlpha * lockedAlpha)
             .shadow(
-                elevation    = when { isLocked -> 1.dp; isDone -> 3.dp; else -> 6.dp },
+                elevation    = if (isLocked) 1.dp else if (isDone) 4.dp else 6.dp,
                 shape        = shape,
-                ambientColor = accentColor.copy(alpha = 0.15f),
+                ambientColor = accentColor.copy(alpha = 0.20f),
                 spotColor    = accentColor.copy(alpha = 0.20f)
             )
             .clip(shape)
             .background(cardBg)
-            .border(
-                width = if (isDone && !isLocked) 1.5.dp else 1.dp,
-                color = borderColor,
-                shape = shape
-            )
-            .clickable(
-                interactionSource = interactionSource,
-                indication        = null
-            ) { onClick() }
+            .border(if (isDone && !isLocked) 1.5.dp else 1.dp, borderColor, shape)
+            .clickable(interactionSource = interactionSource, indication = null) { onClick() }
     ) {
-        // ── Source / lock badge ───────────────────────────────────────────────
+        // Source badge
         Box(
-            modifier = Modifier
-                .fillMaxWidth()
-                .background(
-                    if (isLocked) Color(0xFFE8E8F0)
-                    else accentColor.copy(alpha = 0.12f)
-                )
+            Modifier.fillMaxWidth()
+                .background(if (isLocked) AppColors.Border.copy(alpha = 0.4f) else accentColor.copy(alpha = 0.18f))
                 .padding(horizontal = 10.dp, vertical = 3.dp)
         ) {
             Text(
-                text       = if (isLocked) "🔒 Locked"
-                else "${milestone.source.emoji} ${milestone.source.displayName}",
-                fontSize   = 9.sp,
-                fontWeight = FontWeight.SemiBold,
-                color      = if (isLocked) Color(0xFF9090AA) else accentColor
+                if (isLocked) "🔒 Locked" else "${milestone.source.emoji} ${milestone.source.displayName}",
+                fontSize = 9.sp, fontWeight = FontWeight.SemiBold,
+                color    = if (isLocked) AppColors.TextMuted else accentColor
             )
         }
 
-        // ── Card body ─────────────────────────────────────────────────────────
         Row(
             verticalAlignment = Alignment.CenterVertically,
             modifier          = Modifier.padding(horizontal = 10.dp, vertical = 8.dp)
         ) {
-            // Circle: lock icon / checkmark / step number
             Box(
                 contentAlignment = Alignment.Center,
                 modifier         = Modifier
-                    .size(26.dp)
-                    .clip(CircleShape)
-                    .background(circleBg)
+                    .size(26.dp).clip(CircleShape)
+                    .background(when {
+                        isLocked -> AppColors.Locked
+                        isDone   -> trueAccent
+                        else     -> trueAccent.copy(alpha = 0.20f)
+                    })
                     .clickable(
                         interactionSource = remember { MutableInteractionSource() },
                         indication        = null,
-                        enabled           = !isLocked
+                        enabled           = !isLocked && !isDone
                     ) { onToggleCompletion() }
             ) {
                 when {
-                    isLocked -> Icon(
-                        imageVector        = Icons.Default.Lock,
-                        contentDescription = "Locked",
-                        tint               = Color(0xFF9090AA),
-                        modifier           = Modifier.size(13.dp)
-                    )
-                    isDone -> Icon(
-                        imageVector        = Icons.Default.CheckCircle,
-                        contentDescription = "Completed",
-                        tint               = Color.White,
-                        modifier           = Modifier.size(18.dp)
-                    )
-                    else -> Text(
-                        text       = "${index + 1}",
-                        fontSize   = 11.sp,
-                        fontWeight = FontWeight.Bold,
-                        color      = accentColor
-                    )
+                    isLocked -> Icon(Icons.Default.Lock, null, tint = AppColors.TextMuted, modifier = Modifier.size(13.dp))
+                    isDone   -> Icon(Icons.Default.CheckCircle, null, tint = Color.White, modifier = Modifier.size(18.dp))
+                    else     -> Text("${index + 1}", fontSize = 11.sp, fontWeight = FontWeight.Bold, color = trueAccent)
                 }
             }
 
@@ -195,37 +146,31 @@ fun MilestoneCard(
 
             Column(Modifier.weight(1f)) {
                 Text(
-                    text       = if (isLocked) "Complete step ${index}" else milestone.title,
+                    if (isLocked) "Complete step ${index}" else milestone.title,
                     fontSize   = 12.sp,
                     fontWeight = FontWeight.SemiBold,
                     color      = when {
-                        isLocked -> Color(0xFF9090AA)
+                        isLocked -> AppColors.TextMuted
                         isDone   -> trueAccent
-                        else     -> Color(0xFF1A1A2E)
+                        else     -> AppColors.TextPrimary
                     },
                     maxLines   = 1,
                     overflow   = TextOverflow.Ellipsis
                 )
                 Spacer(Modifier.height(1.dp))
                 Text(
-                    text     = if (isLocked) "Finish previous step first"
-                    else milestone.subtitle,
+                    if (isLocked) "Finish previous step first" else milestone.subtitle,
                     fontSize = 10.sp,
-                    color    = if (isLocked) Color(0xFFAAAAAA) else Color(0xFF9E9E9E),
+                    color    = if (isLocked) AppColors.TextMuted else AppColors.TextSecondary,
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis
                 )
             }
 
             Icon(
-                imageVector        = if (isLocked) Icons.Default.Lock
-                else Icons.AutoMirrored.Filled.KeyboardArrowRight,
-                contentDescription = null,
-                tint               = when {
-                    isLocked -> Color(0xFFCCCCDD)
-                    isDone   -> trueAccent
-                    else     -> Color(0xFFBDBDBD)
-                },
+                if (isLocked) Icons.Default.Lock else Icons.AutoMirrored.Filled.KeyboardArrowRight,
+                null,
+                tint     = if (isDone) trueAccent else AppColors.TextMuted,
                 modifier = Modifier.size(16.dp)
             )
         }
