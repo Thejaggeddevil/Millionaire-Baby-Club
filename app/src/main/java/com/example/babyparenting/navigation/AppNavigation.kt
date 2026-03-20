@@ -1,6 +1,8 @@
 package com.example.babyparenting.navigation
 
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.collectAsState
+import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
 import androidx.compose.ui.platform.LocalContext
 import androidx.lifecycle.viewmodel.compose.viewModel
@@ -16,20 +18,21 @@ import com.example.babyparenting.ui.screens.LoginScreen
 import com.example.babyparenting.ui.screens.OnboardingScreen
 import com.example.babyparenting.ui.screens.ParentGuideDetailScreen
 import com.example.babyparenting.ui.screens.ParentHubScreen
+import com.example.babyparenting.ui.screens.PaywallScreen
 import com.example.babyparenting.ui.screens.SettingsScreen
 import com.example.babyparenting.viewmodel.AdminViewModel
 import com.example.babyparenting.viewmodel.JourneyViewModel
 import com.example.babyparenting.viewmodel.ParentViewModel
-import androidx.compose.runtime.collectAsState
 
 object Routes {
-    const val LOGIN        = "login"
-    const val ONBOARDING   = "onboarding"
-    const val JOURNEY      = "journey"
-    const val ADVICE       = "advice"
-    const val SETTINGS     = "settings"
-    const val ADMIN        = "admin"
-    const val PARENT_HUB   = "parent_hub"
+    const val LOGIN         = "login"
+    const val ONBOARDING    = "onboarding"
+    const val JOURNEY       = "journey"
+    const val ADVICE        = "advice"
+    const val PAYWALL       = "paywall"
+    const val SETTINGS      = "settings"
+    const val ADMIN         = "admin"
+    const val PARENT_HUB    = "parent_hub"
     const val PARENT_DETAIL = "parent_detail"
 }
 
@@ -38,8 +41,8 @@ fun AppNavigation(
     onToggleTheme: () -> Unit,
     navController: NavHostController = rememberNavController()
 ) {
-    val context    = LocalContext.current
-    val session    = remember { SessionManager(context) }
+    val context   = LocalContext.current
+    val session   = remember { SessionManager(context) }
     val journeyVm: JourneyViewModel = viewModel()
     val adminVm:   AdminViewModel   = viewModel()
     val parentVm:  ParentViewModel  = viewModel()
@@ -95,15 +98,24 @@ fun AppNavigation(
 
         // ── Journey map ───────────────────────────────────────────────────────
         composable(Routes.JOURNEY) {
+            // Paywall trigger — jab trial expire ho
+            val showPaywall by journeyVm.showPaywall.collectAsState()
+            if (showPaywall) {
+                navController.navigate(Routes.PAYWALL)
+                journeyVm.dismissPaywall()
+            }
+
             BabyJourneyScreen(
                 viewModel         = journeyVm,
                 onMilestoneTapped = { milestone ->
                     journeyVm.onMilestoneTapped(milestone)
-                    navController.navigate(Routes.ADVICE)
+                    if (journeyVm.canAccessAdvice()) {
+                        navController.navigate(Routes.ADVICE)
+                    }
                 },
                 onSettingsTapped  = { navController.navigate(Routes.SETTINGS) },
                 onParentHubTapped = { navController.navigate(Routes.PARENT_HUB) },
-                onToggleTheme     = onToggleTheme   // ✅ FIX
+                onToggleTheme     = onToggleTheme
             )
         }
 
@@ -114,6 +126,22 @@ fun AppNavigation(
                 onBack    = {
                     journeyVm.resetAdvice()
                     navController.popBackStack()
+                }
+            )
+        }
+
+        // ── Paywall ───────────────────────────────────────────────────────────
+        composable(Routes.PAYWALL) {
+            PaywallScreen(
+                viewModel        = journeyVm,
+                onBack           = {
+                    journeyVm.resetPaymentState()
+                    navController.popBackStack()
+                },
+                onPaymentSuccess = {
+                    navController.navigate(Routes.ADVICE) {
+                        popUpTo(Routes.PAYWALL) { inclusive = true }
+                    }
                 }
             )
         }
@@ -156,7 +184,6 @@ fun AppNavigation(
                     }
                 )
             } else {
-                // Fallback if state lost
                 navController.popBackStack()
             }
         }

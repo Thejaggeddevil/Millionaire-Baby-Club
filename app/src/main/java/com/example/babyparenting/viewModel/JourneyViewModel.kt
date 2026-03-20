@@ -1,8 +1,11 @@
 package com.example.babyparenting.viewmodel
 
+import android.app.Activity
 import android.app.Application
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
+import com.example.babyparenting.data.local.SubscriptionManager
+import com.example.babyparenting.data.local.SubscriptionStatus
 import com.example.babyparenting.data.model.AgeGroup
 import com.example.babyparenting.data.model.DatasetSource
 import com.example.babyparenting.data.model.JourneyProgress
@@ -12,16 +15,28 @@ import com.example.babyparenting.data.repository.ApiRepository
 import com.example.babyparenting.data.repository.MilestoneRepository
 import com.example.babyparenting.network.api.RetrofitProvider
 import com.example.babyparenting.network.model.AdviceResponse
+import com.razorpay.Checkout
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.launch
+import org.json.JSONObject
+
+// ── Payment state ─────────────────────────────────────────────────────────────
+
+sealed class PaymentState {
+    object Idle    : PaymentState()
+    object Loading : PaymentState()
+    data class Success(val paymentId: String) : PaymentState()
+    data class Error(val message: String)     : PaymentState()
+}
 
 class JourneyViewModel(app: Application) : AndroidViewModel(app) {
 
-    private val milestoneRepo = MilestoneRepository(app)
-    private val apiRepo       = ApiRepository(RetrofitProvider.babyApi)
+    private val milestoneRepo       = MilestoneRepository(app)
+    private val apiRepo             = ApiRepository(RetrofitProvider.babyApi)
+    private val subscriptionManager = SubscriptionManager(app)
 
     val milestones: StateFlow<List<Milestone>> = milestoneRepo.milestones
     val ageGroups:  StateFlow<List<AgeGroup>>  = milestoneRepo.ageGroups
@@ -35,7 +50,7 @@ class JourneyViewModel(app: Application) : AndroidViewModel(app) {
     private val _adviceState = MutableStateFlow<UiState<AdviceResponse>>(UiState.Idle)
     val adviceState: StateFlow<UiState<AdviceResponse>> = _adviceState.asStateFlow()
 
-    private val _activeFilter       = MutableStateFlow<DatasetSource?>(null)
+    private val _activeFilter = MutableStateFlow<DatasetSource?>(null)
     val activeFilter: StateFlow<DatasetSource?> = _activeFilter.asStateFlow()
 
     private val _visibleMilestones = MutableStateFlow<List<Milestone>>(emptyList())
@@ -43,6 +58,20 @@ class JourneyViewModel(app: Application) : AndroidViewModel(app) {
 
     private val _filteredMilestones = MutableStateFlow<List<Milestone>>(emptyList())
     val filteredMilestones: StateFlow<List<Milestone>> = _filteredMilestones.asStateFlow()
+
+    // ── Subscription / Payment ────────────────────────────────────────────────
+
+    private val _paymentState = MutableStateFlow<PaymentState>(PaymentState.Idle)
+    val paymentState: StateFlow<PaymentState> = _paymentState.asStateFlow()
+
+    private val _subscriptionStatus = MutableStateFlow(subscriptionManager.getStatus())
+    val subscriptionStatus: StateFlow<SubscriptionStatus> = _subscriptionStatus.asStateFlow()
+
+    private val _showPaywall = MutableStateFlow(false)
+    val showPaywall: StateFlow<Boolean> = _showPaywall.asStateFlow()
+
+    // Razorpay ko Activity chahiye
+    private var currentActivity: Activity? = null
 
     init {
         viewModelScope.launch { milestoneRepo.initialLoad() }
@@ -58,23 +87,23 @@ class JourneyViewModel(app: Application) : AndroidViewModel(app) {
         }
     }
 
+    // ── Activity binding ──────────────────────────────────────────────────────
+
+    fun bindActivity(activity: Activity) { currentActivity = activity }
+    fun unbindActivity() { currentActivity = null }
+
+    // ── Subscription helpers ──────────────────────────────────────────────────
+
+    fun canAccessAdvice(): Boolean = subscriptionManager.canAccessAdvice()
+    fun getDaysRemaining(): Int    = subscriptionManager.daysRemaining()
+    fun refreshSubscriptionStatus() {
+        _subscriptionStatus.value = subscriptionManager.getStatus()
+    }
+
     // ── Completion — ONE WAY, no undo ─────────────────────────────────────────
 
-    /**
-     * Mark a milestone as complete. This is permanent — once done, cannot be undone.
-     * Called from AdviceScreen's "Mark as Complete" button.
-     */
-    fun markComplete(id: String) {
-        milestoneRepo.markComplete(id)   // one-way in repository
-    }
-
-    /**
-     * Called from MilestoneCard's circle tap (also one-way).
-     * If already complete — do nothing.
-     */
-    fun toggleCompletion(id: String) {
-        milestoneRepo.markComplete(id)   // same as markComplete — no undo
-    }
+    fun markComplete(id: String)     = milestoneRepo.markComplete(id)
+    fun toggleCompletion(id: String) = milestoneRepo.markComplete(id)
 
     // ── Visible logic — same age group, 4-4 ──────────────────────────────────
 
@@ -82,9 +111,8 @@ class JourneyViewModel(app: Application) : AndroidViewModel(app) {
         if (all.isEmpty()) return emptyList()
 
         val activeGroupId = findActiveGroupId(all) ?: return all
-
-        val previousDone   = all.filter { it.ageGroupId < activeGroupId }
-        val activeGroupMs  = all.filter { it.ageGroupId == activeGroupId }
+        val previousDone  = all.filter { it.ageGroupId < activeGroupId }
+        val activeGroupMs = all.filter { it.ageGroupId == activeGroupId }
 
         val visibleFromActive = mutableListOf<Milestone>()
         var batchStart = 0
@@ -108,8 +136,8 @@ class JourneyViewModel(app: Application) : AndroidViewModel(app) {
             }
 
     private fun checkAndLoadNextGroup(all: List<Milestone>) {
-        val activeGroupId  = findActiveGroupId(all) ?: return
-        val activeGroupMs  = all.filter { it.ageGroupId == activeGroupId }
+        val activeGroupId = findActiveGroupId(all) ?: return
+        val activeGroupMs = all.filter { it.ageGroupId == activeGroupId }
         if (activeGroupMs.any { !it.isCompleted }) return
         viewModelScope.launch {
             milestoneRepo.loadNextGroupIfNeeded(activeGroupId + 1)
@@ -134,23 +162,92 @@ class JourneyViewModel(app: Application) : AndroidViewModel(app) {
         return !prev.isCompleted
     }
 
-    // ── Actions ───────────────────────────────────────────────────────────────
+    // ── Milestone tap — paywall on first tap if not subscribed ────────────────
 
     fun onMilestoneTapped(milestone: Milestone) {
         _selectedMilestone.value = milestone
-        fetchAdvice(milestone)
+        refreshSubscriptionStatus()
+
+        if (subscriptionManager.canAccessAdvice()) {
+            // Subscribed — seedha advice
+            fetchAdvice(milestone)
+            _showPaywall.value = false
+        } else {
+            // Not subscribed — paywall dikhao
+            _showPaywall.value = true
+        }
     }
+
+    fun dismissPaywall() { _showPaywall.value = false }
+
+    // ── Razorpay ──────────────────────────────────────────────────────────────
+
+    fun startPayment() {
+        val activity = currentActivity ?: run {
+            _paymentState.value = PaymentState.Error("Payment cannot start. Please try again.")
+            return
+        }
+        _paymentState.value = PaymentState.Loading
+        try {
+            val checkout = Checkout()
+            checkout.setKeyID(RAZORPAY_KEY_ID)
+            val options = JSONObject().apply {
+                put("name", "Baby Parenting Companion")
+                put("description", "30 Days Access — ₹1")
+                put("theme.color", "#FF8B94")
+                put("currency", "INR")
+                put("amount", 100)   // 100 paise = ₹1
+                put("prefill", JSONObject().apply {
+                    put("contact", "")
+                    put("email", "")
+                })
+            }
+            checkout.open(activity, options)
+        } catch (e: Exception) {
+            _paymentState.value = PaymentState.Error("Could not open payment. Please try again.")
+        }
+    }
+
+    /** Called from MainActivity after Razorpay success */
+    fun onPaymentSuccess(razorpayPaymentId: String) {
+        subscriptionManager.activateSubscription(razorpayPaymentId)
+        _paymentState.value       = PaymentState.Success(razorpayPaymentId)
+        _subscriptionStatus.value = subscriptionManager.getStatus()
+        _showPaywall.value        = false
+        // Ab advice fetch karo jo block tha
+        _selectedMilestone.value?.let { fetchAdvice(it) }
+    }
+
+    /** Called from MainActivity after Razorpay failure */
+    fun onPaymentError(errorCode: Int, description: String) {
+        _paymentState.value = PaymentState.Error(
+            when (errorCode) {
+                Checkout.NETWORK_ERROR   -> "No internet connection."
+                Checkout.INVALID_OPTIONS -> "Invalid payment options."
+                else -> description.ifBlank { "Payment failed. Please try again." }
+            }
+        )
+    }
+
+    fun resetPaymentState() { _paymentState.value = PaymentState.Idle }
+
+    // ── Other actions ─────────────────────────────────────────────────────────
 
     fun toggleFilter(source: DatasetSource) {
         _activeFilter.value = if (_activeFilter.value == source) null else source
     }
 
-    fun clearFilter()                    { _activeFilter.value = null }
-    fun setChildAge(months: Int)         = milestoneRepo.setChildAge(months)
-    fun setChildName(name: String)       = milestoneRepo.setChildName(name)
-    fun getChildAgeMonths(): Int         = milestoneRepo.getChildAgeMonths()
-    fun getChildName(): String           = milestoneRepo.getChildName()
-    fun refreshAfterAdminEdit()          = milestoneRepo.refreshAdminMilestones()
+    fun clearFilter() { _activeFilter.value = null }
+
+    fun setChildAge(months: Int) {
+        milestoneRepo.setChildAge(months)
+        viewModelScope.launch { milestoneRepo.initialLoad() }
+    }
+
+    fun setChildName(name: String) = milestoneRepo.setChildName(name)
+    fun getChildAgeMonths(): Int   = milestoneRepo.getChildAgeMonths()
+    fun getChildName(): String     = milestoneRepo.getChildName()
+    fun refreshAfterAdminEdit()    = milestoneRepo.refreshAdminMilestones()
 
     fun resetAdvice() {
         _adviceState.value       = UiState.Idle
@@ -171,5 +268,10 @@ class JourneyViewModel(app: Application) : AndroidViewModel(app) {
                 query = milestone.apiQuery
             )
         }
+    }
+
+    companion object {
+        // Test key — production se pehle live key lagana
+        private const val RAZORPAY_KEY_ID = "rzp_test_SHCQZMQFoBaboC"
     }
 }
