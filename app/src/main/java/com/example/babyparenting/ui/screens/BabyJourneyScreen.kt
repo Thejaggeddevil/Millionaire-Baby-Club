@@ -250,10 +250,14 @@ private fun MenuDivider() {
 
 // ── Journey Map ───────────────────────────────────────────────────────────────
 
+
 @Composable
 private fun JourneyMap(
-    milestones: List<Milestone>, ageGroups: List<AgeGroup>, completedCount: Int,
-    onMilestoneTapped: (Milestone) -> Unit, onToggleCompletion: (String) -> Unit,
+    milestones: List<Milestone>,
+    ageGroups: List<AgeGroup>,
+    completedCount: Int,
+    onMilestoneTapped: (Milestone) -> Unit,
+    onToggleCompletion: (String) -> Unit,
     isLocked: (Milestone) -> Boolean
 ) {
     val totalH        = SEGMENT_DP * (milestones.size + 2)
