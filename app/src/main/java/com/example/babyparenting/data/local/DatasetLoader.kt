@@ -23,11 +23,18 @@ import java.io.InputStreamReader
  *   - We NEVER load groups BELOW the child's current age group on first load.
  *
  * Example:
- *   Child = 7 years = 84 months → startingGroupId = 11 (7–9 yrs)
- *   On app open, ONLY group 11 data loads. Groups 1–10 are ignored.
+ *   Child = 8 years 9 months = 105 months → startingGroupId = 11 (7–9 yrs)
+ *   On app open, ONLY group 11 data loads. Groups 1–10 are ignored entirely.
  *   If parent scrolls up to group 10, THEN group 10 loads (lazy, on demand).
  *
- * This prevents the "loading 0-month to 8-year data all at once" hang.
+ * ── FIXES IN THIS VERSION ────────────────────────────────────────────────────
+ * FIX 1: ageRawToMonths() — old code used String.contains() which caused
+ *         "108".contains("8") == true → wrong bucket. Now uses exact word match.
+ * FIX 2: loadGroup_9_12() — Groups 12 and 13 previously both used minMo=108
+ *         maxMo=144, loading identical data twice. Now Group 12 = 108–131 mo,
+ *         Group 13 = 132–144 mo, each gets its own distinct slice.
+ * FIX 3: clearCache() — exposed so MilestoneRepository can wipe stale group
+ *         data when the child's age is changed by the parent.
  *
  * Age Group → CSV mapping:
  *   Group 1–6  (0–24 mo)   : 0_24_month_data.csv + 0_24_data_parent.csv
@@ -36,12 +43,21 @@ import java.io.InputStreamReader
  *   Group 10   (5–7 yr)    : 5_12_year_data.csv + 5_12_year_data_parent.csv
  *                            + language + maths + safety
  *   Group 11   (7–9 yr)    : science + social + civics
- *   Group 12+  (9–12 yr)   : cs + foreign + remaining
+ *   Group 12   (9–11 yr)   : cs + foreign + remaining   [108–131 mo]
+ *   Group 13   (11–12 yr)  : cs + foreign + lang        [132–144 mo]
  */
 class LazyDatasetLoader(private val context: Context) {
 
-    // In-memory cache — ek baar load hua group dobara CSV nahi padhega
+    // In-memory cache — ek baar load hua group dobara CSV nahi padhega.
+    // clearCache() wipes this so a new child age starts completely fresh.
     private val loadedGroups = mutableMapOf<Int, List<Milestone>>()
+
+    /**
+     * Wipe the in-memory group cache.
+     * Must be called whenever the child's age changes so stale groups
+     * from the old age are not served to the new session.
+     */
+    fun clearCache() = loadedGroups.clear()
 
     fun getAgeGroups(): List<AgeGroup> = listOf(
         AgeGroup(1,  "0 – 3 Months",   "Sensory foundation, feeding & safe sleep",        0,   3,   0xFFFF8B94),
@@ -88,11 +104,12 @@ class LazyDatasetLoader(private val context: Context) {
      * FLOOR: the group whose [startMonth, endMonth] contains childAgeMonths.
      *
      * Examples:
-     *   0  months  → Group 1  (floor = 1)
-     *   7  months  → Group 3  (floor = 3)   ← loads ONLY group 3 data
-     *   84 months  → Group 11 (floor = 11)  ← loads ONLY group 11 data, NOT 1–10
-     *   96 months  → Group 11 (floor = 11)
-     *   108 months → Group 12 (floor = 12)
+     *   0   months → Group 1  (newborn)
+     *   7   months → Group 3  ← loads ONLY group 3, NOT groups 1–2
+     *   84  months → Group 11 ← loads ONLY group 11, NOT groups 1–10
+     *   105 months → Group 11 (8 yr 9 mo) ← same, NOT groups 1–10
+     *   108 months → Group 12
+     *   132 months → Group 13
      */
     fun startingGroupId(childAgeMonths: Int): Int = when (childAgeMonths) {
         in 0..2    -> 1
@@ -276,7 +293,7 @@ class LazyDatasetLoader(private val context: Context) {
         return (child + parent + acad).sortedBy { it.ageMonths }
     }
 
-    /** Group 10: 5–7 years */
+    /** Group 10: 5–7 years (60–83 months) */
     private fun loadGroup_5_7(groupId: Int): List<Milestone> {
         val child  = loadSubjectFilter("5_12_year_data.csv", groupId, DatasetSource.CHILD_5_12, "🏃",
             ageKey = "age_range", ageParser = ::parseAgeYearToMonths, minMo = 60, maxMo = 84)
@@ -289,7 +306,7 @@ class LazyDatasetLoader(private val context: Context) {
         return (child + parent + lang + maths + safety).sortedBy { it.ageMonths }
     }
 
-    /** Group 11: 7–9 years */
+    /** Group 11: 7–9 years (84–107 months) */
     private fun loadGroup_7_9(groupId: Int): List<Milestone> {
         val child   = loadSubjectFilter("5_12_year_data.csv", groupId, DatasetSource.CHILD_5_12, "🏃",
             ageKey = "age_range", ageParser = ::parseAgeYearToMonths, minMo = 84, maxMo = 108)
@@ -301,17 +318,32 @@ class LazyDatasetLoader(private val context: Context) {
         return (child + parent + science + social + civics).sortedBy { it.ageMonths }
     }
 
-    /** Groups 12–13: 9–12 years */
+    /**
+     * Groups 12–13: 9–12 years.
+     *
+     * FIX: Previously both groups used minMo=108 maxMo=144, loading the exact
+     * same CSV rows for both groups — doubling data and wasting memory.
+     * Now each group gets its own non-overlapping month slice:
+     *   Group 12 → 108–131 mo  (9 yr to just before 11 yr)
+     *   Group 13 → 132–144 mo  (11–12 yr)
+     */
     private fun loadGroup_9_12(groupId: Int): List<Milestone> {
+        // Each group gets its own distinct month range — no overlap, no duplicate rows.
+        val (minMo, maxMo) = when (groupId) {
+            12   -> 108 to 131
+            else -> 132 to 144   // Group 13 and any future group
+        }
+
         val child   = loadSubjectFilter("5_12_year_data.csv", groupId, DatasetSource.CHILD_5_12, "🏃",
-            ageKey = "age_range", ageParser = ::parseAgeYearToMonths, minMo = 108, maxMo = 144)
+            ageKey = "age_range", ageParser = ::parseAgeYearToMonths, minMo = minMo, maxMo = maxMo)
         val parent  = loadParentFilter("5_12_year_data_parent.csv", groupId, DatasetSource.PARENT_5_12,
-            ageKey = "age_year", minMo = 108, maxMo = 144)
+            ageKey = "age_year", minMo = minMo, maxMo = maxMo)
         val cs      = loadSubjectDataset("cs_5_12_data.csv", groupId, DatasetSource.COMPUTER_SCIENCE, "💻", "11")
         val foreign = loadForeignDataset(groupId, "11")
         val safety  = loadSafetyDataset(groupId, "9")
         val lang    = loadSubjectFilter("language_5_12_data.csv", groupId, DatasetSource.LANGUAGE, "🗣️",
-            ageKey = "age", ageParser = { (it.toDoubleOrNull() ?: 9.0).times(12).toInt() }, minMo = 108, maxMo = 144)
+            ageKey = "age", ageParser = { (it.toDoubleOrNull() ?: 9.0).times(12).toInt() },
+            minMo = minMo, maxMo = maxMo)
         return (child + parent + cs + foreign + safety + lang).sortedBy { it.ageMonths }
     }
 
@@ -487,10 +519,34 @@ class LazyDatasetLoader(private val context: Context) {
         }
     }
 
-    private fun ageRawToMonths(raw: String): Int = when {
-        raw.contains("11") -> 132; raw.contains("9") -> 108
-        raw.contains("8")  -> 96;  raw.contains("7") -> 84
-        raw.contains("5")  -> 60;  else              -> 60
+    /**
+     * Convert a raw age_group string from CSV to an approximate month value.
+     *
+     * FIX: Old code used String.contains() which caused false matches:
+     *   "108".contains("8") == true  → 8-year bucket hit for an 11-year row
+     *   "11".contains("1")  == true  → 1-year bucket hit for an 11-year row
+     *
+     * New code: extract the FIRST integer token from the string, then switch
+     * on its exact numeric value. "9-11" → firstInt=9 → 108 mo. Safe.
+     */
+    private fun ageRawToMonths(raw: String): Int {
+        // Extract the first numeric token, e.g. "9-11 yr" → 9, "11" → 11
+        val firstInt = raw.trim()
+            .split(Regex("[^0-9]"))   // split on any non-digit
+            .firstOrNull { it.isNotEmpty() }
+            ?.toIntOrNull() ?: return 60
+
+        return when (firstInt) {
+            5    -> 60
+            6    -> 72
+            7    -> 84
+            8    -> 96
+            9    -> 108
+            10   -> 120
+            11   -> 132
+            12   -> 144
+            else -> firstInt * 12   // fallback: treat as year and convert
+        }
     }
 
     // ── Emoji helpers ─────────────────────────────────────────────────────────

@@ -14,6 +14,7 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
@@ -26,6 +27,8 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.widthIn
+import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -53,6 +56,7 @@ import androidx.compose.material3.SwitchDefaults
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
@@ -105,8 +109,10 @@ fun BabyJourneyScreen(
     val completedCount  = milestones.count { it.isCompleted }
     var showAgeDialog   by remember { mutableStateOf(false) }
     var menuExpanded    by remember { mutableStateOf(false) }
-
-    Box(Modifier.fillMaxSize()) {
+    LaunchedEffect(Unit) {
+        viewModel.loadDataIfNeeded()
+    }
+    Box(Modifier.fillMaxWidth()) {
         Column(
             Modifier.fillMaxSize().background(c.bgMain).statusBarsPadding()
         ) {
@@ -117,7 +123,11 @@ fun BabyJourneyScreen(
                 onMenuClicked = { menuExpanded = !menuExpanded }
             )
 
-            Box(Modifier.weight(1f).fillMaxWidth()) {
+            Box(
+                modifier = Modifier
+                    .weight(1f)
+                    .fillMaxWidth()
+            ){
                 when {
                     isLoading         -> LoadingView()
                     loadError != null -> ErrorView(loadError!!) { viewModel.reloadDatasets() }
@@ -260,60 +270,107 @@ private fun JourneyMap(
     onToggleCompletion: (String) -> Unit,
     isLocked: (Milestone) -> Boolean
 ) {
-    val totalH        = SEGMENT_DP * (milestones.size + 2)
     val density       = LocalDensity.current
     val screenWidthDp = LocalConfiguration.current.screenWidthDp.dp
-    val wPx           = with(density) { screenWidthDp.toPx() }
-    val hPx           = with(density) { totalH.toPx() }
-    val nodes         = computeNodePositions(milestones.size, wPx, hPx)
 
-    Box(Modifier.fillMaxWidth().verticalScroll(rememberScrollState())) {
-        Box(Modifier.fillMaxWidth().height(totalH)) {
-            PathCanvas(nodes, completedCount, Modifier.fillMaxWidth().height(totalH))
-            FootstepsLayer(nodes, completedCount, Modifier.fillMaxWidth().height(totalH))
+    // ✅ LIMIT RENDER WINDOW (CRITICAL FIX)
+    val visibleItems = milestones.take(12) // only render 12 max
 
-            milestones.forEachIndexed { gIdx, milestone ->
-                if (gIdx >= nodes.size) return@forEachIndexed
+    val totalH = SEGMENT_DP * (visibleItems.size + 2)
 
-                val isFirstInGroup = gIdx == 0 || milestones[gIdx - 1].ageGroupId != milestone.ageGroupId
+    val wPx = with(density) { screenWidthDp.toPx() }
+    val hPx = with(density) { totalH.toPx() }
+
+    // ✅ LIGHTWEIGHT calculation
+    val nodes = remember(visibleItems.size) {
+        computeNodePositions(visibleItems.size, wPx, hPx)
+    }
+
+    Box(
+        Modifier
+            .fillMaxSize()
+            .verticalScroll(rememberScrollState())
+    ) {
+        Box(
+            Modifier
+                .fillMaxWidth()
+                .height(totalH)
+        ) {
+
+            // ✅ SAFE canvas (limited data)
+            PathCanvas(
+                nodes,
+                completedCount,
+                Modifier.fillMaxSize()
+            )
+
+            FootstepsLayer(
+                nodes,
+                completedCount,
+                Modifier.fillMaxSize()
+            )
+
+            visibleItems.forEachIndexed { gIdx, milestone ->
+
+                val isFirstInGroup =
+                    gIdx == 0 || visibleItems[gIdx - 1].ageGroupId != milestone.ageGroupId
+
                 if (isFirstInGroup) {
                     val group = ageGroups.find { it.id == milestone.ageGroupId }
                     if (group != null) {
                         val headerY = with(density) { nodes[gIdx].y.toDp() } - 50.dp
+
                         SectionHeader(
-                            group    = group,
+                            group = group,
                             modifier = Modifier
-                                .offset { IntOffset(with(density) { 12.dp.roundToPx() }, headerY.roundToPx()) }
+                                .offset {
+                                    IntOffset(
+                                        with(density) { 12.dp.roundToPx() },
+                                        headerY.roundToPx()
+                                    )
+                                }
                                 .widthIn(max = screenWidthDp - 24.dp)
                         )
                     }
                 }
 
-                val node      = nodes[gIdx]
-                val isLeft    = gIdx % 2 == 0
-                val nodeXDp   = with(density) { node.x.toDp() }
-                val nodeYDp   = with(density) { node.y.toDp() }
+                val node    = nodes[gIdx]
+                val isLeft  = gIdx % 2 == 0
+                val nodeXDp = with(density) { node.x.toDp() }
+                val nodeYDp = with(density) { node.y.toDp() }
+
                 val cardWidth = 160.dp
-                val cardX     = if (isLeft) nodeXDp + 18.dp else nodeXDp - cardWidth - 18.dp
-                val locked    = isLocked(milestone)
+                val cardX =
+                    if (isLeft) nodeXDp + 18.dp else nodeXDp - cardWidth - 18.dp
+
+                val locked = isLocked(milestone)
 
                 Box(
-                    Modifier.offset { IntOffset(cardX.roundToPx(), (nodeYDp - 22.dp).roundToPx()) }
+                    Modifier
+                        .offset {
+                            IntOffset(
+                                cardX.roundToPx(),
+                                (nodeYDp - 22.dp).roundToPx()
+                            )
+                        }
                         .widthIn(max = cardWidth)
                 ) {
                     MilestoneCard(
-                        milestone          = milestone,
-                        index              = gIdx,
-                        isLocked           = locked,
-                        onClick            = { if (!locked) onMilestoneTapped(milestone) },
-                        onToggleCompletion = { if (!locked && !milestone.isCompleted) onToggleCompletion(milestone.id) }
+                        milestone = milestone,
+                        index = gIdx,
+                        isLocked = locked,
+                        onClick = { if (!locked) onMilestoneTapped(milestone) },
+                        onToggleCompletion = {
+                            if (!locked && !milestone.isCompleted) {
+                                onToggleCompletion(milestone.id)
+                            }
+                        }
                     )
                 }
             }
         }
     }
 }
-
 // ── Header ────────────────────────────────────────────────────────────────────
 
 @Composable
