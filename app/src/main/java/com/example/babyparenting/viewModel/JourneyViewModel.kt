@@ -74,8 +74,6 @@ class JourneyViewModel(app: Application) : AndroidViewModel(app) {
     private var currentActivity: Activity? = null
 
     init {
-        viewModelScope.launch { milestoneRepo.initialLoad() }
-
         viewModelScope.launch {
             combine(milestoneRepo.milestones, _activeFilter) { all, filter ->
                 if (filter == null) all else all.filter { it.source == filter }
@@ -84,6 +82,17 @@ class JourneyViewModel(app: Application) : AndroidViewModel(app) {
                 _visibleMilestones.value  = computeVisible(filtered)
                 checkAndLoadNextGroup(filtered)
             }
+        }
+    }
+
+    private var hasLoaded = false
+
+    fun loadDataIfNeeded() {
+        if (hasLoaded) return
+        hasLoaded = true
+
+        viewModelScope.launch {
+            milestoneRepo.initialLoad()
         }
     }
 

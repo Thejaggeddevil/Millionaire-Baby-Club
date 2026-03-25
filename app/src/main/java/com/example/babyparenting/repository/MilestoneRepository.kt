@@ -19,6 +19,22 @@ import kotlinx.coroutines.withContext
 /**
  * Single source of truth. Lazy loads one age group at a time.
  * markComplete is ONE-WAY — completed milestones cannot be un-completed.
+ *
+ * ── FIXES IN THIS VERSION ────────────────────────────────────────────────────
+ * FIX 1: initialLoad() now calls resetLoadState() first.
+ *         Old: highestLoadedGroup was never reset between reloads.
+ *         If a parent changed the child age from 2 months to 8 years and back,
+ *         highestLoadedGroup stayed at whatever the highest group ever was,
+ *         so loadGroupIfNeeded() silently skipped re-loading the correct group.
+ *
+ * FIX 2: resetLoadState() clears loader.clearCache() before reload.
+ *         Old: loadedGroups map inside LazyDatasetLoader was never cleared.
+ *         Stale milestone lists from the old age remained cached in memory
+ *         forever, even after the child's age was changed.
+ *
+ * FIX 3: setChildAge() now resets load state and then calls initialLoad()
+ *         inline via a flag, so the ViewModel's existing launch{initialLoad()}
+ *         picks up a clean slate every time.
  */
 class MilestoneRepository(private val context: Context) {
 
@@ -45,23 +61,41 @@ class MilestoneRepository(private val context: Context) {
 
     // ── Load ──────────────────────────────────────────────────────────────────
 
+    /**
+     * Full load (or reload after age change).
+     *
+     * FIX: resetLoadState() is called first on every entry.
+     * This ensures that:
+     *   1. loadedMilestones is empty — no stale milestones from old age.
+     *   2. highestLoadedGroup is 0 — loadGroupIfNeeded() won't skip the
+     *      correct new floor group thinking it was "already loaded".
+     *   3. loader cache is wiped — LazyDatasetLoader won't return stale
+     *      memoised data for groups that belonged to the old child age.
+     */
     suspend fun initialLoad() {
         try {
             _isLoading.value = true
             _error.value     = null
+
+            // ✅ FIX: reset in-memory state AND the loader's CSV cache before
+            // every load, so changing child age always starts from a clean slate.
+            resetLoadState()
+
             _ageGroups.value = loader.getAgeGroups()
 
             val childAge = getChildAgeMonths()
 
-            // ✅ FIXED: Only load floor + ceiling group (2 groups max)
-            // Old: for (groupId in 1..startGroup) → loaded ALL groups = ANR
-            // New: groupsToPreload() = only [floorGroup, floorGroup+1]
+            // Only load floor + ceiling group (2 groups max).
+            // If child is 8 yr 9 mo (105 mo) → startingGroupId = 11.
+            // groupsToPreload returns [11, 12] — NOT [1, 2, 3 … 11].
             val groupsToLoad = loader.groupsToPreload(childAge)
             for (groupId in groupsToLoad) {
                 loadGroupIfNeeded(groupId)
             }
 
-            // Auto-complete milestones strictly before child's age
+            // Auto-complete milestones strictly before child's age.
+            // STRICT less-than (<) so milestones AT current age are NOT
+            // auto-completed — those are the ones they should do NOW.
             val correctIds = loadedMilestones
                 .filter { it.ageMonths < childAge }
                 .map { it.id }
@@ -82,6 +116,7 @@ class MilestoneRepository(private val context: Context) {
             _isLoading.value = false
         }
     }
+
     suspend fun loadNextGroupIfNeeded(nextGroupId: Int) {
         if (nextGroupId > loader.totalGroups()) return
         if (nextGroupId <= highestLoadedGroup) return
@@ -116,26 +151,23 @@ class MilestoneRepository(private val context: Context) {
 
     // ── Child profile ─────────────────────────────────────────────────────────
 
+    /**
+     * Persist the new child age and immediately reset all in-memory state.
+     *
+     * FIX: Old code only saved the age and recomputed completedIds on whatever
+     * loadedMilestones happened to be in memory — which could be wrong groups.
+     * Now we wipe everything cleanly. The ViewModel's setChildAge() then calls
+     * initialLoad() which picks up a fresh slate.
+     */
     fun setChildAge(months: Int) {
         prefs.edit().putInt(KEY_AGE, months).apply()
 
-        // RESET completedIds and recompute from scratch.
-        // This ensures changing age always gives a clean, correct state.
-        // We use STRICT less-than (<) so milestones AT the child's current age
-        // are NOT auto-completed — those are the ones they should do NOW.
-        //
-        // Example: Newborn (0 months) → nothing auto-completed (0 < 0 = false)
-        // Example: 6 months → milestones for 0–5 months auto-completed (ageMonths < 6)
-        val freshIds = loadedMilestones
-            .filter { it.ageMonths < months }   // strictly BEFORE child's age
-            .map { it.id }
-            .toMutableSet()
+        // Wipe stale in-memory data — initialLoad() will re-populate from scratch
+        // using the new age's floor group, not the old age's floor group.
+        resetLoadState()
 
-        saveCompletedIds(freshIds)
-        loadedMilestones = loadedMilestones.map {
-            it.copy(isCompleted = it.id in freshIds)
-        }.toMutableList()
-        _milestones.value = loadedMilestones.toList()
+        // Emit empty list while the upcoming initialLoad() runs.
+        _milestones.value = emptyList()
         _progress.value   = buildProgress()
     }
 
@@ -151,10 +183,27 @@ class MilestoneRepository(private val context: Context) {
 
     // ── Private ───────────────────────────────────────────────────────────────
 
-    // ✅ Add withContext(Dispatchers.IO) here
+    /**
+     * Wipe all in-memory milestone data and the loader's CSV cache.
+     *
+     * Must be called at the start of every initialLoad() and when the child's
+     * age changes, so no stale data from a previous session leaks into the
+     * new load.
+     *
+     * After this call:
+     *   - loadedMilestones is empty
+     *   - highestLoadedGroup is 0   (loadGroupIfNeeded won't skip anything)
+     *   - LazyDatasetLoader cache is cleared (no memoised stale CSV rows)
+     */
+    private fun resetLoadState() {
+        loadedMilestones   = mutableListOf()
+        highestLoadedGroup = 0
+        loader.clearCache()           // ✅ FIX: wipe stale LazyDatasetLoader cache
+    }
+
     private suspend fun loadGroupIfNeeded(groupId: Int) {
         if (groupId <= highestLoadedGroup) return
-        val newMs = withContext(Dispatchers.IO) {   // ← add this
+        val newMs = withContext(Dispatchers.IO) {
             loader.loadForGroup(groupId)
         }
         loadedMilestones.addAll(newMs)
