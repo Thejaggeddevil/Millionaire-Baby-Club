@@ -260,6 +260,7 @@ private fun MenuDivider() {
 
 // ── Journey Map ───────────────────────────────────────────────────────────────
 
+
 @Composable
 private fun JourneyMap(
     milestones: List<Milestone>,

@@ -252,6 +252,6 @@ class AuthViewModel(app: Application) : AndroidViewModel(app) {
     }
 
     companion object {
-        private const val BASE_URL = "https://babytrackerbackend-gqk0.onrender.com"
+        private const val BASE_URL = "http://192.168.1.15:8000"
     }
 }

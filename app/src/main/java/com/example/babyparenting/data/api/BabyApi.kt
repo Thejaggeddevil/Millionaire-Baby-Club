@@ -19,7 +19,7 @@ interface BabyApi {
 
 object RetrofitProvider {
 
-    private const val BASE_URL = "https://babytrackerbackend-gqk0.onrender.com/"
+    private const val BASE_URL = "http://192.168.1.15:8000/"
 
     private val loggingInterceptor = HttpLoggingInterceptor().apply {
         level = HttpLoggingInterceptor.Level.BODY
