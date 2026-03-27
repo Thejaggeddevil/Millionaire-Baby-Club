@@ -15,10 +15,10 @@ data class Strategy(
     val description: String,
 
     @SerializedName("age_min")
-    val age_min: Int,
+    val age_min: Int = 0,
 
     @SerializedName("age_max")
-    val age_max: Int,
+    val age_max: Int = 0,
 
     @SerializedName("icon")
     val icon: String? = null,
@@ -37,25 +37,25 @@ data class Activity(
     val id: Int,
 
     @SerializedName("strategy_id")
-    val strategy_id: Int,
+    val strategy_id: Int = 0,
 
     @SerializedName("title")
-    val title: String,
+    val title: String = "",
 
     @SerializedName("description")
-    val description: String,
+    val description: String = "",
 
     @SerializedName("plan")
-    val plan: String,
+    val plan: String = "",
 
-    @SerializedName("do_instruction")
-    val do_instruction: String,
+    @SerializedName("do")          // ← YEH FIX KIYA, "do_instruction" se "do" kiya
+    val do_instruction: String = "",
 
     @SerializedName("review")
-    val review: String,
+    val review: String = "",
 
     @SerializedName("level")
-    val level: Int,
+    val level: Int = 1,
 
     @SerializedName("duration_minutes")
     val duration_minutes: Int = 10,
@@ -81,35 +81,58 @@ data class ActivityCompletion(
 
 data class ActivityCompletionResponse(
     @SerializedName("status")
-    val status: String,
+    val status: String = "",
 
     @SerializedName("message")
     val message: String? = null
 )
 
+// ===== ACTIVITY DETAIL =====
+
+data class ActivityDetail(
+    @SerializedName("id")
+    val id: Int = 0,
+
+    @SerializedName("title")
+    val title: String = "",
+
+    @SerializedName("plan")
+    val plan: String = "",
+
+    @SerializedName("do")
+    val `do`: String = "",
+
+    @SerializedName("review")
+    val review: String = "",
+
+    @SerializedName("strategy_id")
+    val strategy_id: Int = 0
+)
+
 // ===== DAILY ACTIVITY RESPONSE =====
 
 data class DailyActivityResponse(
-    @SerializedName("activity_id")
-    val activity_id: Int,
+    @SerializedName("activity")
+    val activity: ActivityDetail? = null,
 
-    @SerializedName("strategy_id")
-    val strategy_id: Int,
+    @SerializedName("message")
+    val message: String? = null
+)
 
-    @SerializedName("title")
-    val title: String,
+// ===== PROGRESS SUMMARY =====
 
-    @SerializedName("plan")
-    val plan: String,
+data class ProgressSummary(
+    @SerializedName("total_activities")
+    val total_activities: Int = 0,
 
-    @SerializedName("do_instruction")
-    val do_instruction: String,
+    @SerializedName("completed_activities")
+    val completed_activities: Int = 0,
 
-    @SerializedName("review")
-    val review: String,
+    @SerializedName("completion_percentage")
+    val completion_percentage: Float = 0f,
 
-    @SerializedName("level")
-    val level: Int
+    @SerializedName("current_level")
+    val current_level: Int = 1
 )
 
 // ===== ACTIVITY WITH STATUS (LOCAL) =====

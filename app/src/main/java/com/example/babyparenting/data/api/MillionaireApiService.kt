@@ -1,6 +1,7 @@
 package com.example.babyparenting.data.api
 
 import com.example.babyparenting.data.model.*
+import com.example.babyparenting.data.model.ProgressSummary
 import retrofit2.http.*
 
 interface MillionaireApiService {
@@ -12,46 +13,36 @@ interface MillionaireApiService {
     /**
      * Fetch all available strategies
      */
-    @GET("strategies")
+    @GET("millionaire/strategies")
     suspend fun getStrategies(): List<Strategy>
 
-    /**
-     * Fetch activities for a specific strategy
-     */
-    @GET("strategies/{strategy_id}/activities")
+    // ✅ Fixed: was "millionaire/strategies/{strategy_id}/activities"
+    @GET("millionaire/activities/{strategy_id}")
     suspend fun getActivities(
         @Path("strategy_id") strategyId: Int
     ): List<Activity>
 
-    /**
-     * Mark an activity as completed
-     */
-    @POST("activity/complete")
+    @POST("millionaire/complete")
     suspend fun markActivityComplete(
         @Body completion: ActivityCompletion
     ): ActivityCompletionResponse
 
-    /**
-     * Get today's recommended activity
-     */
-    @GET("daily-activity")
+    @GET("millionaire/daily-activity")
     suspend fun getDailyActivity(
         @Query("user_id") userId: String,
         @Query("child_age") childAge: Int
     ): DailyActivityResponse
 
-    /**
-     * Get progress summary
-     */
-    @GET("progress/summary")
+    @GET("millionaire/progress/summary")
     suspend fun getProgressSummary(
         @Query("user_id") userId: String
     ): ProgressSummary
+
 }
 
-data class ProgressSummary(
-    val total_activities: Int,
-    val completed_activities: Int,
-    val completion_percentage: Float,
-    val current_level: Int
-)
+//data class ProgressSummary(
+//    val total_activities: Int,
+//    val completed_activities: Int,
+//    val completion_percentage: Float,
+//    val current_level: Int
+//)

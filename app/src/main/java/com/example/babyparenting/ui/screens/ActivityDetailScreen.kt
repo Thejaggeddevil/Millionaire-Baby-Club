@@ -19,7 +19,7 @@ import androidx.compose.ui.unit.sp
 import com.example.babyparenting.data.model.DailyActivityResponse
 import com.example.babyparenting.ui.viewmodel.MillionaireViewModel
 import com.example.babyparenting.ui.theme.LocalAppColors
-import com.example.babyparenting.ui.theme.AppColorScheme  // ✅ was AppColors (wrong name)
+import com.example.babyparenting.ui.theme.AppColorScheme
 import com.example.babyparenting.ui.viewmodel.CompletionUiState
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -39,11 +39,10 @@ fun ActivityDetailScreen(
             .fillMaxSize()
             .background(colors.bgMain)
     ) {
-        // Header with Back Button
         TopAppBar(
             title = {
                 Text(
-                    text = activity.title,
+                    text = activity.activity?.title ?: "",
                     fontSize = 18.sp,
                     fontWeight = FontWeight.Bold,
                     color = colors.textPrimary,
@@ -68,54 +67,48 @@ fun ActivityDetailScreen(
 
         LazyColumn(
             modifier = Modifier
-                .fillMaxSize()
                 .weight(1f)
                 .padding(bottom = 16.dp),
             verticalArrangement = Arrangement.spacedBy(16.dp),
             contentPadding = PaddingValues(16.dp)
         ) {
-            // Level Badge
             item {
                 Row(
                     verticalAlignment = Alignment.CenterVertically,
                     horizontalArrangement = Arrangement.spacedBy(8.dp),
                     modifier = Modifier.fillMaxWidth()
                 ) {
-                    LevelBadge(level = activity.level, colors = colors)
+                    LevelBadge(level = activity.activity?.strategy_id ?: 1, colors = colors)
                     if (isCompleted) {
                         CompletedBadge(colors = colors)
                     }
                 }
             }
 
-            // PLAN Section
             item {
                 ActivitySection(
                     title = "🎯 PLAN",
-                    content = activity.plan,
+                    content = activity.activity?.plan ?: "",
                     colors = colors
                 )
             }
 
-            // DO Section
             item {
                 ActivitySection(
                     title = "🚀 DO",
-                    content = activity.do_instruction,
+                    content = activity.activity?.`do` ?: "",
                     colors = colors
                 )
             }
 
-            // REVIEW Section
             item {
                 ActivitySection(
                     title = "🤔 REVIEW",
-                    content = activity.review,
+                    content = activity.activity?.review ?: "",
                     colors = colors
                 )
             }
 
-            // REPEAT Section
             item {
                 ActivitySection(
                     title = "🔁 REPEAT",
@@ -125,7 +118,6 @@ fun ActivityDetailScreen(
                 )
             }
 
-            // Message
             item {
                 if (completionState is CompletionUiState.Success) {
                     SuccessMessage(
@@ -145,13 +137,12 @@ fun ActivityDetailScreen(
             }
         }
 
-        // Action Buttons (Sticky)
         ActionButtons(
             isCompleted = isCompleted,
-            isLoading = completionState is CompletionUiState.Idle || completionState is CompletionUiState.Success,
+            isLoading = completionState is CompletionUiState.Loading,
             colors = colors,
             onMarkCompleted = {
-                viewModel.markActivityAsCompleted(activity.activity_id)
+                viewModel.markActivityAsCompleted(activity.activity?.id ?: 0)
                 onCompleted()
             }
         )
@@ -161,7 +152,7 @@ fun ActivityDetailScreen(
 @Composable
 private fun LevelBadge(
     level: Int,
-    colors: AppColorScheme  // ✅ was AppColors (wrong name)
+    colors: AppColorScheme
 ) {
     Surface(
         color = colors.lavender.copy(alpha = 0.3f),
@@ -179,10 +170,10 @@ private fun LevelBadge(
 
 @Composable
 private fun CompletedBadge(
-    colors: AppColorScheme  // ✅ was AppColors (wrong name)
+    colors: AppColorScheme
 ) {
     Surface(
-        color = colors.coral.copy(alpha = 0.15f),  // ✅ was colors.primary (doesn't exist)
+        color = colors.coral.copy(alpha = 0.15f),
         shape = RoundedCornerShape(8.dp)
     ) {
         Row(
@@ -193,14 +184,14 @@ private fun CompletedBadge(
             Icon(
                 imageVector = Icons.Default.Check,
                 contentDescription = "Completed",
-                tint = colors.coral,  // ✅ was colors.primary (doesn't exist)
+                tint = colors.coral,
                 modifier = Modifier.size(14.dp)
             )
             Text(
                 text = "Completed",
                 fontSize = 12.sp,
                 fontWeight = FontWeight.SemiBold,
-                color = colors.coral  // ✅ was colors.primary (doesn't exist)
+                color = colors.coral
             )
         }
     }
@@ -210,7 +201,7 @@ private fun CompletedBadge(
 private fun ActivitySection(
     title: String,
     content: String,
-    colors: AppColorScheme,  // ✅ was AppColors (wrong name)
+    colors: AppColorScheme,
     isHighlighted: Boolean = false
 ) {
     Card(
@@ -232,7 +223,7 @@ private fun ActivitySection(
                 text = title,
                 fontSize = 14.sp,
                 fontWeight = FontWeight.Bold,
-                color = colors.coral  // ✅ was colors.primary (doesn't exist)
+                color = colors.coral
             )
             Text(
                 text = content,
@@ -247,12 +238,12 @@ private fun ActivitySection(
 @Composable
 private fun SuccessMessage(
     message: String,
-    colors: AppColorScheme  // ✅ was AppColors (wrong name)
+    colors: AppColorScheme
 ) {
     Card(
         modifier = Modifier.fillMaxWidth(),
         colors = CardDefaults.cardColors(
-            containerColor = colors.coral.copy(alpha = 0.1f)  // ✅ was colors.primary (doesn't exist)
+            containerColor = colors.coral.copy(alpha = 0.1f)
         ),
         shape = RoundedCornerShape(12.dp)
     ) {
@@ -266,13 +257,13 @@ private fun SuccessMessage(
             Icon(
                 imageVector = Icons.Default.Check,
                 contentDescription = "Success",
-                tint = colors.coral,  // ✅ was colors.primary (doesn't exist)
+                tint = colors.coral,
                 modifier = Modifier.size(24.dp)
             )
             Text(
                 text = message,
                 fontSize = 13.sp,
-                color = colors.coral,  // ✅ was colors.primary (doesn't exist)
+                color = colors.coral,
                 fontWeight = FontWeight.Medium
             )
         }
@@ -282,7 +273,7 @@ private fun SuccessMessage(
 @Composable
 private fun ErrorMessage(
     message: String,
-    colors: AppColorScheme  // ✅ was AppColors (wrong name)
+    colors: AppColorScheme
 ) {
     Card(
         modifier = Modifier.fillMaxWidth(),
@@ -307,7 +298,7 @@ private fun ErrorMessage(
 private fun ActionButtons(
     isCompleted: Boolean,
     isLoading: Boolean,
-    colors: AppColorScheme,  // ✅ was AppColors (wrong name)
+    colors: AppColorScheme,
     onMarkCompleted: () -> Unit
 ) {
     Column(
@@ -320,27 +311,27 @@ private fun ActionButtons(
         if (!isCompleted) {
             Button(
                 onClick = onMarkCompleted,
-                enabled = isLoading,
+                enabled = !isLoading,
                 modifier = Modifier
                     .fillMaxWidth()
                     .height(48.dp),
                 colors = ButtonDefaults.buttonColors(
-                    containerColor = colors.coral,              // ✅ was colors.primary
-                    disabledContainerColor = colors.coral.copy(alpha = 0.5f)  // ✅ was colors.primary
+                    containerColor = colors.coral,
+                    disabledContainerColor = colors.coral.copy(alpha = 0.5f)
                 ),
                 shape = RoundedCornerShape(12.dp)
             ) {
                 if (isLoading) {
-                    Text(
-                        text = "Mark as Completed",
-                        fontSize = 14.sp,
-                        fontWeight = FontWeight.SemiBold
-                    )
-                } else {
                     CircularProgressIndicator(
                         modifier = Modifier.size(20.dp),
                         color = MaterialTheme.colorScheme.onPrimary,
                         strokeWidth = 2.dp
+                    )
+                } else {
+                    Text(
+                        text = "Mark as Completed",
+                        fontSize = 14.sp,
+                        fontWeight = FontWeight.SemiBold
                     )
                 }
             }
@@ -352,7 +343,7 @@ private fun ActionButtons(
                     .fillMaxWidth()
                     .height(48.dp),
                 colors = ButtonDefaults.buttonColors(
-                    disabledContainerColor = colors.coral.copy(alpha = 0.3f)  // ✅ was colors.primary
+                    disabledContainerColor = colors.coral.copy(alpha = 0.3f)
                 ),
                 shape = RoundedCornerShape(12.dp)
             ) {
@@ -378,14 +369,14 @@ private fun ActionButtons(
             shape = RoundedCornerShape(12.dp),
             border = androidx.compose.foundation.BorderStroke(
                 width = 1.5.dp,
-                color = colors.coral.copy(alpha = 0.3f)  // ✅ was colors.primary
+                color = colors.coral.copy(alpha = 0.3f)
             )
         ) {
             Text(
                 text = "Try Again",
                 fontSize = 14.sp,
                 fontWeight = FontWeight.SemiBold,
-                color = colors.coral  // ✅ was colors.primary (doesn't exist)
+                color = colors.coral
             )
         }
     }

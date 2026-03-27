@@ -20,9 +20,8 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import com.example.babyparenting.data.api.ProgressSummary
+import com.example.babyparenting.data.model.ProgressSummary
 import com.example.babyparenting.data.model.DailyActivityResponse
-
 import com.example.babyparenting.data.model.Strategy
 import com.example.babyparenting.ui.viewmodel.MillionaireViewModel
 import com.example.babyparenting.ui.theme.LocalAppColors
@@ -48,7 +47,6 @@ fun MillionaireClubScreen(
             .padding(bottom = 16.dp),
         verticalArrangement = Arrangement.spacedBy(20.dp)
     ) {
-        // ===== Header =====
         item {
             Column(
                 modifier = Modifier
@@ -65,32 +63,31 @@ fun MillionaireClubScreen(
                 Text(
                     text = "Build thinking skills through daily activities",
                     fontSize = 14.sp,
-                    color = colors.textSecondary ?: colors.textPrimary.copy(alpha = 0.7f),
+                    color = colors.textPrimary.copy(alpha = 0.7f),
                     fontWeight = FontWeight.Normal
                 )
             }
         }
 
-        // ===== Today's Activity Card =====
         item {
             when (val state = dailyActivityState) {
                 is DailyActivityUiState.Success -> {
                     TodaysActivityCard(
                         activity = state.activity,
                         colors = colors,
-                        onActivityClick = { onActivityClick(state.activity.activity_id, state.activity.strategy_id) }
+                        onActivityClick = {
+                            onActivityClick(
+                                state.activity.activity?.id ?: 0,
+                                state.activity.activity?.strategy_id ?: 0
+                            )
+                        }
                     )
                 }
-                is DailyActivityUiState.Loading -> {
-                    LoadingCard()
-                }
-                is DailyActivityUiState.Error -> {
-                    ErrorCard(message = state.message)
-                }
+                is DailyActivityUiState.Loading -> LoadingCard()
+                is DailyActivityUiState.Error -> ErrorCard(message = state.message)
             }
         }
 
-        // ===== Progress Summary =====
         item {
             when (val state = progressState) {
                 is ProgressUiState.Success -> {
@@ -99,17 +96,12 @@ fun MillionaireClubScreen(
                         colors = colors
                     )
                 }
-                is ProgressUiState.Loading -> {
-                    LoadingCard()
-                }
-                is ProgressUiState.Error -> {
-                    // Silent failure for progress (optional)
-                }
+                is ProgressUiState.Loading -> LoadingCard()
+                is ProgressUiState.Error -> {}
                 else -> {}
             }
         }
 
-        // ===== Strategies Section Header =====
         item {
             Text(
                 text = "Learning Strategies",
@@ -120,7 +112,6 @@ fun MillionaireClubScreen(
             )
         }
 
-        // ===== Strategies Horizontal List =====
         item {
             when (val state = strategiesState) {
                 is StrategiesUiState.Success -> {
@@ -140,15 +131,11 @@ fun MillionaireClubScreen(
                         CircularProgressIndicator(color = colors.coral)
                     }
                 }
-                is StrategiesUiState.Error -> {
-                    ErrorCard(message = state.message)
-                }
+                is StrategiesUiState.Error -> ErrorCard(message = state.message)
             }
         }
 
-        item {
-            Spacer(modifier = Modifier.height(16.dp))
-        }
+        item { Spacer(modifier = Modifier.height(16.dp)) }
     }
 }
 
@@ -188,7 +175,7 @@ private fun TodaysActivityCard(
                         color = colors.coral
                     )
                     Text(
-                        text = activity.title,
+                        text = activity.activity?.title ?: "",
                         fontSize = 18.sp,
                         fontWeight = FontWeight.Bold,
                         color = colors.textPrimary
@@ -202,7 +189,7 @@ private fun TodaysActivityCard(
                 )
             }
             Text(
-                text = "Level ${activity.level} • 10 min",
+                text = "Strategy ${activity.activity?.strategy_id ?: ""} • 10 min",
                 fontSize = 12.sp,
                 color = colors.textPrimary.copy(alpha = 0.6f)
             )
@@ -247,7 +234,6 @@ private fun ProgressSummaryCard(
                 )
             }
 
-            // Progress Bar
             LinearProgressIndicator(
                 progress = progress.completion_percentage / 100f,
                 modifier = Modifier
@@ -278,7 +264,6 @@ private fun ProgressStatItem(
     Column(
         horizontalAlignment = Alignment.CenterHorizontally,
         modifier = Modifier
-
             .background(colors.coral.copy(alpha = 0.05f), RoundedCornerShape(12.dp))
             .padding(12.dp)
     ) {
