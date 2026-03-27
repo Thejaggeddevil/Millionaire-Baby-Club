@@ -1,5 +1,6 @@
 package com.example.babyparenting.ui.screens.millionaire
 
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
@@ -12,7 +13,9 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.ArrowBack
 import androidx.compose.material.icons.filled.Check
 import androidx.compose.material3.*
+import androidx.compose.material3.TabRowDefaults.tabIndicatorOffset
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect           // ✅ real import; wrapper at bottom removed
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
@@ -23,8 +26,11 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.example.babyparenting.data.model.Activity
 import com.example.babyparenting.ui.viewmodel.MillionaireViewModel
+import com.example.babyparenting.ui.theme.AppColorScheme  // ✅ was AppColors
 import com.example.babyparenting.ui.theme.LocalAppColors
+import com.example.babyparenting.ui.viewmodel.ActivitiesUiState
 
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun StrategyDetailScreen(
     strategyId: Int,
@@ -34,7 +40,7 @@ fun StrategyDetailScreen(
     onBackClick: () -> Unit
 ) {
     val activitiesState by viewModel.activitiesState.collectAsState()
-    val completedActivities by viewModel.completedActivities.collectAsState()
+    val completedActivities by viewModel.completedActivities.collectAsState( initial = emptySet())
     val colors = LocalAppColors.current
 
     LaunchedEffect(strategyId) {
@@ -46,7 +52,6 @@ fun StrategyDetailScreen(
             .fillMaxSize()
             .background(colors.bgMain)
     ) {
-        // Header with Back Button
         TopAppBar(
             title = {
                 Column {
@@ -90,7 +95,7 @@ fun StrategyDetailScreen(
                     modifier = Modifier.fillMaxSize(),
                     contentAlignment = Alignment.Center
                 ) {
-                    CircularProgressIndicator(color = colors.primary)
+                    CircularProgressIndicator(color = colors.coral)  // ✅ was colors.primary
                 }
             }
             is ActivitiesUiState.Error -> {
@@ -114,7 +119,7 @@ fun StrategyDetailScreen(
 private fun ActivitiesListWithLevelTabs(
     activities: List<Activity>,
     completedActivities: Set<Int>,
-    colors: com.example.babyparenting.ui.theme.AppColors,
+    colors: AppColorScheme,       // ✅ was AppColors
     onActivityClick: (Activity) -> Unit
 ) {
     val levels = activities.map { it.level }.distinct().sorted()
@@ -125,18 +130,17 @@ private fun ActivitiesListWithLevelTabs(
             .fillMaxSize()
             .padding(bottom = 16.dp)
     ) {
-        // Level Tabs
         ScrollableTabRow(
             selectedTabIndex = pagerState.currentPage,
             modifier = Modifier
                 .fillMaxWidth()
                 .background(colors.bgSurface),
             containerColor = colors.bgSurface,
-            contentColor = colors.primary,
+            contentColor = colors.coral,          // ✅ was colors.primary
             indicator = { tabPositions ->
                 TabRowDefaults.SecondaryIndicator(
                     Modifier.tabIndicatorOffset(tabPositions[pagerState.currentPage]),
-                    color = colors.primary
+                    color = colors.coral          // ✅ was colors.primary
                 )
             }
         ) {
@@ -157,13 +161,12 @@ private fun ActivitiesListWithLevelTabs(
             }
         }
 
-        // Activities Pager
         HorizontalPager(
             state = pagerState,
             modifier = Modifier.fillMaxSize()
         ) { pageIndex ->
             val levelActivities = activities.filter { it.level == levels[pageIndex] }
-            
+
             LazyColumn(
                 modifier = Modifier
                     .fillMaxSize()
@@ -188,7 +191,7 @@ private fun ActivitiesListWithLevelTabs(
 private fun ActivityListItem(
     activity: Activity,
     isCompleted: Boolean,
-    colors: com.example.babyparenting.ui.theme.AppColors,
+    colors: AppColorScheme,   // ✅ was AppColors
     onClick: () -> Unit
 ) {
     Card(
@@ -198,14 +201,13 @@ private fun ActivityListItem(
             .clickable(onClick = onClick),
         colors = CardDefaults.cardColors(
             containerColor = if (isCompleted)
-                colors.primary.copy(alpha = 0.08f) else colors.bgSurface
+                colors.coral.copy(alpha = 0.08f) else colors.bgSurface  // ✅ was colors.primary
         ),
         elevation = CardDefaults.cardElevation(defaultElevation = 2.dp),
         border = if (isCompleted)
-            androidx.compose.foundation.border(
+            BorderStroke(               // ✅ was androidx.compose.foundation.border() — wrong API for Card
                 width = 2.dp,
-                color = colors.primary,
-                shape = RoundedCornerShape(16.dp)
+                color = colors.coral    // ✅ was colors.primary
             ) else null
     ) {
         Row(
@@ -215,12 +217,12 @@ private fun ActivityListItem(
                 .fillMaxWidth()
                 .padding(16.dp)
         ) {
-            // Status Badge
             Box(
                 modifier = Modifier
                     .size(40.dp)
                     .background(
-                        color = if (isCompleted) colors.primary else colors.lavender.copy(alpha = 0.3f),
+                        color = if (isCompleted) colors.coral  // ✅ was colors.primary
+                        else colors.lavender.copy(alpha = 0.3f),
                         shape = RoundedCornerShape(12.dp)
                     ),
                 contentAlignment = Alignment.Center
@@ -229,7 +231,7 @@ private fun ActivityListItem(
                     Icon(
                         imageVector = Icons.Default.Check,
                         contentDescription = "Completed",
-                        tint = androidx.compose.material3.MaterialTheme.colorScheme.onPrimary,
+                        tint = MaterialTheme.colorScheme.onPrimary,  // ✅ removed redundant fully-qualified prefix
                         modifier = Modifier.size(24.dp)
                     )
                 } else {
@@ -242,7 +244,6 @@ private fun ActivityListItem(
                 }
             }
 
-            // Activity Info
             Column(
                 modifier = Modifier.weight(1f),
                 verticalArrangement = Arrangement.spacedBy(4.dp)
@@ -266,12 +267,11 @@ private fun ActivityListItem(
                 )
             }
 
-            // Status Label
             if (isCompleted) {
                 Text(
                     text = "✓",
                     fontSize = 20.sp,
-                    color = colors.primary,
+                    color = colors.coral,  // ✅ was colors.primary
                     fontWeight = FontWeight.Bold
                 )
             }
@@ -279,9 +279,4 @@ private fun ActivityListItem(
     }
 }
 
-@Composable
-private fun LaunchedEffect(key: Int, onEffect: suspend () -> Unit) {
-    androidx.compose.runtime.LaunchedEffect(key) {
-        onEffect()
-    }
-}
+// ✅ Custom LaunchedEffect wrapper removed — real one imported from androidx.compose.runtime

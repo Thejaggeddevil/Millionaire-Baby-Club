@@ -2,6 +2,7 @@ package com.example.babyparenting.ui.viewmodel
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import com.example.babyparenting.data.api.ProgressSummary
 import com.example.babyparenting.data.model.*
 import com.example.babyparenting.data.repository.MillionaireRepository
 import dagger.hilt.android.lifecycle.HiltViewModel

@@ -5,6 +5,7 @@ import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
 import androidx.compose.ui.platform.LocalContext
+import androidx.hilt.navigation.compose.hiltViewModel  // ✅ ADD THIS IMPORT
 import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.navigation.NavHostController
 import androidx.navigation.compose.NavHost
@@ -58,12 +59,12 @@ fun AppNavigation(
     val parentVm:  ParentViewModel  = viewModel()
     val authVm:    AuthViewModel    = viewModel()
 
-  val startDestination =
-      when {
-      authVm.isLoggedIn() && journeyVm.getChildName().isNotBlank() -> Routes.JOURNEY
-        authVm.isLoggedIn()                                          -> Routes.ONBOARDING
-        else                                                         -> Routes.LOGIN
-    }
+    val startDestination = Routes.JOURNEY
+//      when {
+//      authVm.isLoggedIn() && journeyVm.getChildName().isNotBlank() -> Routes.JOURNEY
+//        authVm.isLoggedIn()                                          -> Routes.ONBOARDING
+//        else                                                         -> Routes.LOGIN
+//    }
 
     NavHost(navController = navController, startDestination = startDestination) {
 
@@ -78,7 +79,7 @@ fun AppNavigation(
                             popUpTo(Routes.LOGIN) { inclusive = true }
                         }
                     }
-                ok
+                    ok
                 }
             )
         }
@@ -141,6 +142,7 @@ fun AppNavigation(
                     }
                 },
                 onSettingsTapped  = { navController.navigate(Routes.SETTINGS) },
+                onMillionaireTapped = { navController.navigate(Routes.MILLIONAIRE) },  // ✅ FIXED: Added callback
                 onParentHubTapped = { navController.navigate(Routes.PARENT_HUB) },
                 onToggleTheme     = onToggleTheme
             )
@@ -202,9 +204,11 @@ fun AppNavigation(
                 }
             )
         }
-        // ── Millionaire Club ─────────────────────────────
+
+        // ── Millionaire Club ─────────────────────────────────────────────────
+        // ✅ FIXED: Changed viewModel() to hiltViewModel()
         composable(Routes.MILLIONAIRE) {
-            val vm: MillionaireViewModel = viewModel()
+            val vm: MillionaireViewModel = hiltViewModel()  // ✅ USE HILT VERSION
 
             MillionaireClubScreen(
                 viewModel = vm,
@@ -217,9 +221,10 @@ fun AppNavigation(
             )
         }
 
-// ── Strategy Detail ─────────────────────────────
+        // ── Strategy Detail ─────────────────────────────────────────────────
+        // ✅ FIXED: Changed viewModel() to hiltViewModel()
         composable("${Routes.STRATEGY_DETAIL}/{id}") { backStackEntry ->
-            val vm: MillionaireViewModel = viewModel()
+            val vm: MillionaireViewModel = hiltViewModel()  // ✅ USE HILT VERSION
             val id = backStackEntry.arguments?.getString("id")?.toInt() ?: 0
 
             StrategyDetailScreen(

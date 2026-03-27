@@ -13,14 +13,16 @@ import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.clip
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.example.babyparenting.data.model.DailyActivityResponse
 import com.example.babyparenting.ui.viewmodel.MillionaireViewModel
 import com.example.babyparenting.ui.theme.LocalAppColors
+import com.example.babyparenting.ui.theme.AppColorScheme  // ✅ was AppColors (wrong name)
+import com.example.babyparenting.ui.viewmodel.CompletionUiState
 
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun ActivityDetailScreen(
     activity: DailyActivityResponse,
@@ -159,7 +161,7 @@ fun ActivityDetailScreen(
 @Composable
 private fun LevelBadge(
     level: Int,
-    colors: com.example.babyparenting.ui.theme.AppColors
+    colors: AppColorScheme  // ✅ was AppColors (wrong name)
 ) {
     Surface(
         color = colors.lavender.copy(alpha = 0.3f),
@@ -177,10 +179,10 @@ private fun LevelBadge(
 
 @Composable
 private fun CompletedBadge(
-    colors: com.example.babyparenting.ui.theme.AppColors
+    colors: AppColorScheme  // ✅ was AppColors (wrong name)
 ) {
     Surface(
-        color = colors.primary.copy(alpha = 0.15f),
+        color = colors.coral.copy(alpha = 0.15f),  // ✅ was colors.primary (doesn't exist)
         shape = RoundedCornerShape(8.dp)
     ) {
         Row(
@@ -191,14 +193,14 @@ private fun CompletedBadge(
             Icon(
                 imageVector = Icons.Default.Check,
                 contentDescription = "Completed",
-                tint = colors.primary,
+                tint = colors.coral,  // ✅ was colors.primary (doesn't exist)
                 modifier = Modifier.size(14.dp)
             )
             Text(
                 text = "Completed",
                 fontSize = 12.sp,
                 fontWeight = FontWeight.SemiBold,
-                color = colors.primary
+                color = colors.coral  // ✅ was colors.primary (doesn't exist)
             )
         }
     }
@@ -208,7 +210,7 @@ private fun CompletedBadge(
 private fun ActivitySection(
     title: String,
     content: String,
-    colors: com.example.babyparenting.ui.theme.AppColors,
+    colors: AppColorScheme,  // ✅ was AppColors (wrong name)
     isHighlighted: Boolean = false
 ) {
     Card(
@@ -230,7 +232,7 @@ private fun ActivitySection(
                 text = title,
                 fontSize = 14.sp,
                 fontWeight = FontWeight.Bold,
-                color = colors.primary
+                color = colors.coral  // ✅ was colors.primary (doesn't exist)
             )
             Text(
                 text = content,
@@ -245,12 +247,12 @@ private fun ActivitySection(
 @Composable
 private fun SuccessMessage(
     message: String,
-    colors: com.example.babyparenting.ui.theme.AppColors
+    colors: AppColorScheme  // ✅ was AppColors (wrong name)
 ) {
     Card(
         modifier = Modifier.fillMaxWidth(),
         colors = CardDefaults.cardColors(
-            containerColor = colors.primary.copy(alpha = 0.1f)
+            containerColor = colors.coral.copy(alpha = 0.1f)  // ✅ was colors.primary (doesn't exist)
         ),
         shape = RoundedCornerShape(12.dp)
     ) {
@@ -264,13 +266,13 @@ private fun SuccessMessage(
             Icon(
                 imageVector = Icons.Default.Check,
                 contentDescription = "Success",
-                tint = colors.primary,
+                tint = colors.coral,  // ✅ was colors.primary (doesn't exist)
                 modifier = Modifier.size(24.dp)
             )
             Text(
                 text = message,
                 fontSize = 13.sp,
-                color = colors.primary,
+                color = colors.coral,  // ✅ was colors.primary (doesn't exist)
                 fontWeight = FontWeight.Medium
             )
         }
@@ -280,7 +282,7 @@ private fun SuccessMessage(
 @Composable
 private fun ErrorMessage(
     message: String,
-    colors: com.example.babyparenting.ui.theme.AppColors
+    colors: AppColorScheme  // ✅ was AppColors (wrong name)
 ) {
     Card(
         modifier = Modifier.fillMaxWidth(),
@@ -305,7 +307,7 @@ private fun ErrorMessage(
 private fun ActionButtons(
     isCompleted: Boolean,
     isLoading: Boolean,
-    colors: com.example.babyparenting.ui.theme.AppColors,
+    colors: AppColorScheme,  // ✅ was AppColors (wrong name)
     onMarkCompleted: () -> Unit
 ) {
     Column(
@@ -323,8 +325,8 @@ private fun ActionButtons(
                     .fillMaxWidth()
                     .height(48.dp),
                 colors = ButtonDefaults.buttonColors(
-                    containerColor = colors.primary,
-                    disabledContainerColor = colors.primary.copy(alpha = 0.5f)
+                    containerColor = colors.coral,              // ✅ was colors.primary
+                    disabledContainerColor = colors.coral.copy(alpha = 0.5f)  // ✅ was colors.primary
                 ),
                 shape = RoundedCornerShape(12.dp)
             ) {
@@ -337,7 +339,7 @@ private fun ActionButtons(
                 } else {
                     CircularProgressIndicator(
                         modifier = Modifier.size(20.dp),
-                        color = androidx.compose.material3.MaterialTheme.colorScheme.onPrimary,
+                        color = MaterialTheme.colorScheme.onPrimary,
                         strokeWidth = 2.dp
                     )
                 }
@@ -350,7 +352,7 @@ private fun ActionButtons(
                     .fillMaxWidth()
                     .height(48.dp),
                 colors = ButtonDefaults.buttonColors(
-                    disabledContainerColor = colors.primary.copy(alpha = 0.3f)
+                    disabledContainerColor = colors.coral.copy(alpha = 0.3f)  // ✅ was colors.primary
                 ),
                 shape = RoundedCornerShape(12.dp)
             ) {
@@ -374,17 +376,16 @@ private fun ActionButtons(
                 .fillMaxWidth()
                 .height(48.dp),
             shape = RoundedCornerShape(12.dp),
-            border = androidx.compose.foundation.border(
+            border = androidx.compose.foundation.BorderStroke(
                 width = 1.5.dp,
-                color = colors.primary.copy(alpha = 0.3f),
-                shape = RoundedCornerShape(12.dp)
+                color = colors.coral.copy(alpha = 0.3f)  // ✅ was colors.primary
             )
         ) {
             Text(
                 text = "Try Again",
                 fontSize = 14.sp,
                 fontWeight = FontWeight.SemiBold,
-                color = colors.primary
+                color = colors.coral  // ✅ was colors.primary (doesn't exist)
             )
         }
     }

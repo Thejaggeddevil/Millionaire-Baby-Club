@@ -9,6 +9,8 @@ import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.map
 import javax.inject.Inject
 import javax.inject.Singleton
+import com.example.babyparenting.data.api.MillionaireApiService
+import com.example.babyparenting.data.api.ProgressSummary
 
 private val Context.millionaireDataStore: DataStore<Preferences> by preferencesDataStore(
     name = "millionaire_club_prefs"
@@ -20,6 +22,7 @@ class MillionaireRepository @Inject constructor(
     private val context: Context
 ) {
 
+    private var strategies: Result<List<Strategy>> = TODO("initialize me")
     private val dataStore = context.millionaireDataStore
 
     // DataStore Keys

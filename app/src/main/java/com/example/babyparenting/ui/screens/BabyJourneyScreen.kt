@@ -97,6 +97,7 @@ fun BabyJourneyScreen(
     viewModel: JourneyViewModel,
     onMilestoneTapped: (Milestone) -> Unit,
     onSettingsTapped: () -> Unit,
+    onMillionaireTapped:()->Unit,
     onParentHubTapped: () -> Unit,
     onToggleTheme: () -> Unit
 ) {
@@ -156,7 +157,7 @@ fun BabyJourneyScreen(
                 isDark          = c.isDark,
                 onParentHub     = { menuExpanded = false; onParentHubTapped() },
                 onMilestones    = { menuExpanded = false },
-                onMillionaire   = { menuExpanded = false },
+                onMillionaire   = { menuExpanded = false; onMillionaireTapped() },  // ✅ FIXED: Added missing callback
                 onSettings      = { menuExpanded = false; onSettingsTapped() },
                 onToggleTheme   = { menuExpanded = false; onToggleTheme() }
             )

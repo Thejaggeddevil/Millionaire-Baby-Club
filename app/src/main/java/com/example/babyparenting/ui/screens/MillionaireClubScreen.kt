@@ -20,11 +20,15 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.example.babyparenting.data.api.ProgressSummary
 import com.example.babyparenting.data.model.DailyActivityResponse
-import com.example.babyparenting.data.model.ProgressSummary
+
 import com.example.babyparenting.data.model.Strategy
 import com.example.babyparenting.ui.viewmodel.MillionaireViewModel
 import com.example.babyparenting.ui.theme.LocalAppColors
+import com.example.babyparenting.ui.viewmodel.DailyActivityUiState
+import com.example.babyparenting.ui.viewmodel.ProgressUiState
+import com.example.babyparenting.ui.viewmodel.StrategiesUiState
 
 @Composable
 fun MillionaireClubScreen(
@@ -133,7 +137,7 @@ fun MillionaireClubScreen(
                             .height(200.dp),
                         contentAlignment = Alignment.Center
                     ) {
-                        CircularProgressIndicator(color = colors.primary)
+                        CircularProgressIndicator(color = colors.coral)
                     }
                 }
                 is StrategiesUiState.Error -> {
@@ -151,7 +155,7 @@ fun MillionaireClubScreen(
 @Composable
 private fun TodaysActivityCard(
     activity: DailyActivityResponse,
-    colors: com.example.babyparenting.ui.theme.AppColors,
+    colors: com.example.babyparenting.ui.theme.AppColorScheme,
     onActivityClick: () -> Unit
 ) {
     Card(
@@ -181,7 +185,7 @@ private fun TodaysActivityCard(
                         text = "Today's Activity",
                         fontSize = 12.sp,
                         fontWeight = FontWeight.SemiBold,
-                        color = colors.primary
+                        color = colors.coral
                     )
                     Text(
                         text = activity.title,
@@ -193,7 +197,7 @@ private fun TodaysActivityCard(
                 Icon(
                     imageVector = Icons.Default.ArrowForward,
                     contentDescription = "Open activity",
-                    tint = colors.primary,
+                    tint = colors.coral,
                     modifier = Modifier.size(24.dp)
                 )
             }
@@ -209,7 +213,7 @@ private fun TodaysActivityCard(
 @Composable
 private fun ProgressSummaryCard(
     progress: ProgressSummary,
-    colors: com.example.babyparenting.ui.theme.AppColors
+    colors: com.example.babyparenting.ui.theme.AppColorScheme
 ) {
     Card(
         modifier = Modifier
@@ -239,7 +243,7 @@ private fun ProgressSummaryCard(
                     text = "${progress.completed_activities}/${progress.total_activities}",
                     fontSize = 14.sp,
                     fontWeight = FontWeight.Bold,
-                    color = colors.primary
+                    color = colors.coral
                 )
             }
 
@@ -250,8 +254,8 @@ private fun ProgressSummaryCard(
                     .fillMaxWidth()
                     .height(8.dp)
                     .clip(RoundedCornerShape(4.dp)),
-                color = colors.primary,
-                trackColor = colors.primary.copy(alpha = 0.2f)
+                color = colors.coral,
+                trackColor = colors.coral.copy(alpha = 0.2f)
             )
 
             Row(
@@ -269,20 +273,20 @@ private fun ProgressSummaryCard(
 private fun ProgressStatItem(
     label: String,
     value: String,
-    colors: com.example.babyparenting.ui.theme.AppColors
+    colors: com.example.babyparenting.ui.theme.AppColorScheme
 ) {
     Column(
         horizontalAlignment = Alignment.CenterHorizontally,
         modifier = Modifier
-            .weight(1f)
-            .background(colors.primary.copy(alpha = 0.05f), RoundedCornerShape(12.dp))
+
+            .background(colors.coral.copy(alpha = 0.05f), RoundedCornerShape(12.dp))
             .padding(12.dp)
     ) {
         Text(
             text = value,
             fontSize = 20.sp,
             fontWeight = FontWeight.Bold,
-            color = colors.primary
+            color = colors.coral
         )
         Text(
             text = label,
@@ -295,7 +299,7 @@ private fun ProgressStatItem(
 @Composable
 private fun StrategiesHorizontalList(
     strategies: List<Strategy>,
-    colors: com.example.babyparenting.ui.theme.AppColors,
+    colors: com.example.babyparenting.ui.theme.AppColorScheme,
     onStrategyClick: (Int) -> Unit
 ) {
     LazyRow(
@@ -316,7 +320,7 @@ private fun StrategiesHorizontalList(
 @Composable
 private fun StrategyCard(
     strategy: Strategy,
-    colors: com.example.babyparenting.ui.theme.AppColors,
+    colors: com.example.babyparenting.ui.theme.AppColorScheme,
     onClick: () -> Unit
 ) {
     Card(
@@ -353,7 +357,7 @@ private fun StrategyCard(
                     text = "${strategy.completed_count}/${strategy.total_activities}",
                     fontSize = 12.sp,
                     fontWeight = FontWeight.SemiBold,
-                    color = colors.primary
+                    color = colors.coral
                 )
                 LinearProgressIndicator(
                     progress = if (strategy.total_activities > 0)
@@ -362,8 +366,8 @@ private fun StrategyCard(
                         .fillMaxWidth()
                         .height(6.dp)
                         .clip(RoundedCornerShape(3.dp)),
-                    color = colors.primary,
-                    trackColor = colors.primary.copy(alpha = 0.2f)
+                    color = colors.coral,
+                    trackColor = colors.coral.copy(alpha = 0.2f)
                 )
             }
         }
@@ -380,7 +384,7 @@ private fun LoadingCard() {
             .background(LocalAppColors.current.bgSurface, RoundedCornerShape(16.dp)),
         contentAlignment = Alignment.Center
     ) {
-        CircularProgressIndicator(color = LocalAppColors.current.primary)
+        CircularProgressIndicator(color = LocalAppColors.current.coral)
     }
 }
 
