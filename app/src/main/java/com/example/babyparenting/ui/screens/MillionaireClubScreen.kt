@@ -10,6 +10,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.ArrowForward
 import androidx.compose.material.icons.filled.Info
+import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material3.*
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
@@ -18,6 +19,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.example.babyparenting.data.model.ProgressSummary
@@ -45,21 +47,22 @@ fun MillionaireClubScreen(
             .fillMaxSize()
             .background(colors.bgMain)
             .padding(bottom = 16.dp),
-        verticalArrangement = Arrangement.spacedBy(20.dp)
+        verticalArrangement = Arrangement.spacedBy(24.dp)
     ) {
+        // Header Section
         item {
             Column(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .padding(horizontal = 16.dp, vertical = 24.dp)
+                    .padding(horizontal = 16.dp, vertical = 20.dp)
             ) {
                 Text(
                     text = "Millionaire Baby Club",
-                    fontSize = 28.sp,
-                    fontWeight = FontWeight.Bold,
+                    fontSize = 32.sp,
+                    fontWeight = FontWeight.ExtraBold,
                     color = colors.textPrimary
                 )
-                Spacer(modifier = Modifier.height(4.dp))
+                Spacer(modifier = Modifier.height(8.dp))
                 Text(
                     text = "Build thinking skills through daily activities",
                     fontSize = 14.sp,
@@ -69,71 +72,130 @@ fun MillionaireClubScreen(
             }
         }
 
+        // Daily Activity Section (Changes at midnight)
         item {
-            when (val state = dailyActivityState) {
-                is DailyActivityUiState.Success -> {
-                    TodaysActivityCard(
-                        activity = state.activity,
-                        colors = colors,
-                        onActivityClick = {
-                            // ✅ FIXED: Use actual data from activity.activity (nested object)
-                            val activityId = state.activity.activity?.id?.toInt() ?: 0
-                            val strategyId = state.activity.activity?.strategy_id ?: 0
-                            if (activityId > 0) {
-                                onActivityClick(activityId, strategyId)
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 16.dp)
+            ) {
+                Text(
+                    text = "Today's Challenge",
+                    fontSize = 16.sp,
+                    fontWeight = FontWeight.SemiBold,
+                    color = colors.textPrimary,
+                    modifier = Modifier.padding(bottom = 12.dp)
+                )
+
+                when (val state = dailyActivityState) {
+                    is DailyActivityUiState.Success -> {
+                        TodaysActivityCard(
+                            activity = state.activity,
+                            colors = colors,
+                            onActivityClick = {
+                                val activityId = state.activity.activity?.id?.toInt() ?: 0
+                                val strategyId = state.activity.activity?.strategy_id ?: 0
+                                if (activityId > 0) {
+                                    onActivityClick(activityId, strategyId)
+                                }
+                            }
+                        )
+                    }
+                    is DailyActivityUiState.Loading -> LoadingCard()
+                    is DailyActivityUiState.Error -> ErrorCard(message = state.message)
+                }
+            }
+        }
+
+        // Progress Summary Section
+        item {
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 16.dp)
+            ) {
+                Text(
+                    text = "Your Progress",
+                    fontSize = 16.sp,
+                    fontWeight = FontWeight.SemiBold,
+                    color = colors.textPrimary,
+                    modifier = Modifier.padding(bottom = 12.dp)
+                )
+
+                when (val state = progressState) {
+                    is ProgressUiState.Success -> {
+                        ProgressSummaryCard(
+                            progress = state.progress,
+                            colors = colors
+                        )
+                    }
+                    is ProgressUiState.Loading -> LoadingCard()
+                    is ProgressUiState.Error -> {}
+                    else -> {}
+                }
+            }
+        }
+
+        // Strategies Section with Horizontal Scrolling
+        item {
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+            ) {
+                Text(
+                    text = "Learning Strategies",
+                    fontSize = 16.sp,
+                    fontWeight = FontWeight.SemiBold,
+                    color = colors.textPrimary,
+                    modifier = Modifier.padding(horizontal = 16.dp, vertical = 12.dp)
+                )
+
+                when (val state = strategiesState) {
+                    is StrategiesUiState.Success -> {
+                        if (state.strategies.isNotEmpty()) {
+                            StrategiesHorizontalList(
+                                strategies = state.strategies,
+                                colors = colors,
+                                onStrategyClick = onStrategyClick
+                            )
+                        } else {
+                            Box(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .height(200.dp)
+                                    .padding(horizontal = 16.dp),
+                                contentAlignment = Alignment.Center
+                            ) {
+                                Text(
+                                    text = "No strategies available",
+                                    color = colors.textPrimary.copy(alpha = 0.5f),
+                                    fontSize = 14.sp
+                                )
                             }
                         }
-                    )
-                }
-                is DailyActivityUiState.Loading -> LoadingCard()
-                is DailyActivityUiState.Error -> ErrorCard(message = state.message)
-            }
-        }
-
-        item {
-            when (val state = progressState) {
-                is ProgressUiState.Success -> {
-                    ProgressSummaryCard(
-                        progress = state.progress,
-                        colors = colors
-                    )
-                }
-                is ProgressUiState.Loading -> LoadingCard()
-                is ProgressUiState.Error -> {}
-                else -> {}
-            }
-        }
-
-        item {
-            Text(
-                text = "Learning Strategies",
-                fontSize = 20.sp,
-                fontWeight = FontWeight.SemiBold,
-                color = colors.textPrimary,
-                modifier = Modifier.padding(horizontal = 16.dp)
-            )
-        }
-
-        item {
-            when (val state = strategiesState) {
-                is StrategiesUiState.Success -> {
-                    StrategiesHorizontalList(
-                        strategies = state.strategies,
-                        colors = colors,
-                        onStrategyClick = onStrategyClick
-                    )
-                }
-                is StrategiesUiState.Loading -> {
-                    Box(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .height(200.dp),
-                        contentAlignment = Alignment.Center
-                    ) {
-                        CircularProgressIndicator(color = colors.coral)
+                    }
+                    is StrategiesUiState.Loading -> {
+                        Box(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .height(220.dp),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            CircularProgressIndicator(color = colors.coral)
+                        }
+                    }
+                    is StrategiesUiState.Error -> {
+                        Box(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .height(220.dp)
+                                .padding(horizontal = 16.dp),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            ErrorCard(message = state.message)
+                        }
                     }
                 }
-                is StrategiesUiState.Error -> ErrorCard(message = state.message)
             }
         }
 
@@ -141,6 +203,10 @@ fun MillionaireClubScreen(
     }
 }
 
+/**
+ * Daily Activity Card - Shows today's challenge with compelling design
+ * Updates at midnight automatically
+ */
 @Composable
 private fun TodaysActivityCard(
     activity: DailyActivityResponse,
@@ -150,38 +216,41 @@ private fun TodaysActivityCard(
     Card(
         modifier = Modifier
             .fillMaxWidth()
-            .padding(horizontal = 16.dp)
             .clip(RoundedCornerShape(20.dp))
             .clickable(onClick = onActivityClick),
         colors = CardDefaults.cardColors(
-            containerColor = colors.coral.copy(alpha = 0.1f)
+            containerColor = colors.coral.copy(alpha = 0.08f)
         ),
-        elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
+        elevation = CardDefaults.cardElevation(defaultElevation = 3.dp),
+        border = androidx.compose.foundation.BorderStroke(
+            width = 1.5.dp,
+            color = colors.coral.copy(alpha = 0.3f)
+        )
     ) {
         Column(
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(20.dp),
-            verticalArrangement = Arrangement.spacedBy(12.dp)
+                .padding(24.dp),
+            verticalArrangement = Arrangement.spacedBy(16.dp)
         ) {
+            // Top section with label and arrow
             Row(
-                verticalAlignment = Alignment.Top,  // ✅ FIXED: Align to top to keep text visible
+                verticalAlignment = Alignment.CenterVertically,
                 horizontalArrangement = Arrangement.SpaceBetween,
                 modifier = Modifier.fillMaxWidth()
             ) {
-                // ✅ FIXED: Use weight(1f) in Row context properly
                 Column(modifier = Modifier.weight(1f)) {
                     Text(
-                        text = "Today's Activity",
+                        text = "Today's Challenge",
                         fontSize = 12.sp,
                         fontWeight = FontWeight.SemiBold,
                         color = colors.coral
                     )
-                    // ✅ FIXED: Uses actual JSON data with proper fallback
+                    Spacer(modifier = Modifier.height(8.dp))
                     Text(
                         text = activity.activity?.title ?: "No activity today",
-                        fontSize = 18.sp,
-                        fontWeight = FontWeight.Bold,
+                        fontSize = 20.sp,
+                        fontWeight = FontWeight.ExtraBold,
                         color = colors.textPrimary,
                         maxLines = 2
                     )
@@ -191,31 +260,81 @@ private fun TodaysActivityCard(
                     contentDescription = "Open activity",
                     tint = colors.coral,
                     modifier = Modifier
-                        .size(24.dp)
-                        .align(Alignment.Top)  // ✅ Align icon to top
+                        .size(28.dp)
+                        .align(Alignment.Top)
                 )
             }
-            // ✅ FIXED: Uses actual duration from JSON data, not hardcoded "10 min"
-            Text(
-                text = "Strategy ${activity.activity?.strategy_id ?: "N/A"} • ${activity.activity?.duration ?: 10} min",
-                fontSize = 12.sp,
-                color = colors.textPrimary.copy(alpha = 0.6f)
-            )
+
+            // Activity metadata
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .background(colors.coral.copy(alpha = 0.05f), RoundedCornerShape(12.dp))
+                    .padding(12.dp),
+                horizontalArrangement = Arrangement.spacedBy(16.dp),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Text(
+                    text = "⏱ ${activity.activity?.duration ?: 10} min",
+                    fontSize = 13.sp,
+                    fontWeight = FontWeight.SemiBold,
+                    color = colors.textPrimary
+                )
+                Text(
+                    text = "•",
+                    fontSize = 13.sp,
+                    color = colors.textPrimary.copy(alpha = 0.3f)
+                )
+                Text(
+                    text = "Strategy ${activity.activity?.strategy_id ?: "N/A"}",
+                    fontSize = 13.sp,
+                    fontWeight = FontWeight.SemiBold,
+                    color = colors.textPrimary
+                )
+            }
+
+            // Call to action button
+            Button(
+                onClick = onActivityClick,
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(48.dp),
+                colors = ButtonDefaults.buttonColors(
+                    containerColor = colors.coral
+                ),
+                shape = RoundedCornerShape(12.dp)
+            ) {
+                Icon(
+                    imageVector = Icons.Default.PlayArrow,
+                    contentDescription = "Start activity",
+                    modifier = Modifier.size(20.dp),
+                    tint = MaterialTheme.colorScheme.onPrimary
+                )
+                Spacer(modifier = Modifier.width(8.dp))
+                Text(
+                    text = "Start Challenge",
+                    fontSize = 14.sp,
+                    fontWeight = FontWeight.SemiBold,
+                    color = MaterialTheme.colorScheme.onPrimary
+                )
+            }
         }
     }
 }
 
+/**
+ * Progress Summary Card - Shows overall progress and achievements
+ */
 @Composable
 private fun ProgressSummaryCard(
     progress: ProgressSummary,
     colors: com.example.babyparenting.ui.theme.AppColorScheme
 ) {
     Card(
-        modifier = Modifier
-            .fillMaxWidth()
-            .padding(horizontal = 16.dp),
+        modifier = Modifier.fillMaxWidth(),
         colors = CardDefaults.cardColors(containerColor = colors.bgSurface),
-        elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
+        elevation = CardDefaults.cardElevation(defaultElevation = 2.dp),
+        shape = RoundedCornerShape(16.dp)
     ) {
         Column(
             modifier = Modifier
@@ -223,72 +342,109 @@ private fun ProgressSummaryCard(
                 .padding(20.dp),
             verticalArrangement = Arrangement.spacedBy(16.dp)
         ) {
+            // Main progress info
             Row(
                 verticalAlignment = Alignment.CenterVertically,
                 horizontalArrangement = Arrangement.SpaceBetween,
                 modifier = Modifier.fillMaxWidth()
             ) {
                 Text(
-                    text = "Your Progress",
-                    fontSize = 16.sp,
+                    text = "Activities Completed",
+                    fontSize = 14.sp,
                     fontWeight = FontWeight.SemiBold,
                     color = colors.textPrimary
                 )
                 Text(
                     text = "${progress.completed_activities}/${progress.total_activities}",
-                    fontSize = 14.sp,
-                    fontWeight = FontWeight.Bold,
+                    fontSize = 16.sp,
+                    fontWeight = FontWeight.ExtraBold,
                     color = colors.coral
                 )
             }
 
-            LinearProgressIndicator(
-                progress = progress.completion_percentage / 100f,
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .height(8.dp)
-                    .clip(RoundedCornerShape(4.dp)),
-                color = colors.coral,
-                trackColor = colors.coral.copy(alpha = 0.2f)
-            )
+            // Progress bar
+            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                LinearProgressIndicator(
+                    progress = (progress.completion_percentage / 100f).coerceIn(0f, 1f),
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(10.dp)
+                        .clip(RoundedCornerShape(5.dp)),
+                    color = colors.coral,
+                    trackColor = colors.coral.copy(alpha = 0.2f)
+                )
+                Text(
+                    text = "${progress.completion_percentage.toInt()}% Complete",
+                    fontSize = 12.sp,
+                    color = colors.textPrimary.copy(alpha = 0.6f),
+                    textAlign = TextAlign.End,
+                    modifier = Modifier.fillMaxWidth()
+                )
+            }
 
+            // Stats row
             Row(
-                horizontalArrangement = Arrangement.spacedBy(16.dp),
+                horizontalArrangement = Arrangement.spacedBy(12.dp),
                 modifier = Modifier.fillMaxWidth()
             ) {
-                ProgressStatItem("Completed", progress.completed_activities.toString(), colors)
-                ProgressStatItem("Level", "${progress.current_level}", colors)
+                ProgressStatItem(
+                    label = "Completed",
+                    value = progress.completed_activities.toString(),
+                    colors = colors,
+                    modifier = Modifier.weight(1f)
+                )
+                ProgressStatItem(
+                    label = "Level",
+                    value = "${progress.current_level}",
+                    colors = colors,
+                    modifier = Modifier.weight(1f)
+                )
+                ProgressStatItem(
+                    label = "Streak",
+                    value = "🔥",
+                    colors = colors,
+                    modifier = Modifier.weight(1f)
+                )
             }
         }
     }
 }
 
+/**
+ * Individual progress statistic item
+ */
 @Composable
 private fun ProgressStatItem(
     label: String,
     value: String,
-    colors: com.example.babyparenting.ui.theme.AppColorScheme
+    colors: com.example.babyparenting.ui.theme.AppColorScheme,
+    modifier: Modifier = Modifier
 ) {
     Column(
         horizontalAlignment = Alignment.CenterHorizontally,
-        modifier = Modifier
-            .background(colors.coral.copy(alpha = 0.05f), RoundedCornerShape(12.dp))
+        modifier = modifier
+            .background(colors.coral.copy(alpha = 0.08f), RoundedCornerShape(12.dp))
             .padding(12.dp)
     ) {
         Text(
             text = value,
             fontSize = 20.sp,
-            fontWeight = FontWeight.Bold,
+            fontWeight = FontWeight.ExtraBold,
             color = colors.coral
         )
         Text(
             text = label,
-            fontSize = 12.sp,
-            color = colors.textPrimary.copy(alpha = 0.6f)
+            fontSize = 11.sp,
+            color = colors.textPrimary.copy(alpha = 0.6f),
+            fontWeight = FontWeight.SemiBold
         )
     }
 }
 
+/**
+ * Horizontally scrollable list of learning strategies
+ * Each card has a button to view all activities for that strategy
+ */
 @Composable
 private fun StrategiesHorizontalList(
     strategies: List<Strategy>,
@@ -296,20 +452,29 @@ private fun StrategiesHorizontalList(
     onStrategyClick: (Int) -> Unit
 ) {
     LazyRow(
-        horizontalArrangement = Arrangement.spacedBy(12.dp),
+        horizontalArrangement = Arrangement.spacedBy(14.dp),
         contentPadding = PaddingValues(horizontal = 16.dp),
         modifier = Modifier.fillMaxWidth()
     ) {
-        items(strategies) { strategy ->
-            StrategyCard(
-                strategy = strategy,
-                colors = colors,
-                onClick = { onStrategyClick(strategy.id) }
-            )
+        items(
+            count = strategies.size,
+            key = { index -> strategies.getOrNull(index)?.id ?: index }
+        ) { index ->
+            strategies.getOrNull(index)?.let { strategy ->
+                StrategyCard(
+                    strategy = strategy,
+                    colors = colors,
+                    onClick = { onStrategyClick(strategy.id) }
+                )
+            }
         }
     }
 }
 
+/**
+ * Individual Strategy Card
+ * Shows strategy details and a button to view all activities
+ */
 @Composable
 private fun StrategyCard(
     strategy: Strategy,
@@ -318,9 +483,8 @@ private fun StrategyCard(
 ) {
     Card(
         modifier = Modifier
-            .width(160.dp)
-            .clip(RoundedCornerShape(16.dp))
-            .clickable(onClick = onClick),
+            .width(180.dp)
+            .clip(RoundedCornerShape(16.dp)),
         colors = CardDefaults.cardColors(containerColor = colors.bgSurface),
         elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
     ) {
@@ -330,31 +494,48 @@ private fun StrategyCard(
                 .padding(16.dp),
             verticalArrangement = Arrangement.SpaceBetween
         ) {
-            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+            // Strategy info
+            Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
                 Text(
                     text = strategy.title,
-                    fontSize = 14.sp,
-                    fontWeight = FontWeight.Bold,
+                    fontSize = 15.sp,
+                    fontWeight = FontWeight.ExtraBold,
                     color = colors.textPrimary,
                     maxLines = 2
                 )
-                Text(
-                    text = "${strategy.age_min}–${strategy.age_max} years",
-                    fontSize = 11.sp,
-                    color = colors.textPrimary.copy(alpha = 0.6f)
-                )
+
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(6.dp),
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    Text(
+                        text = "👶",
+                        fontSize = 12.sp
+                    )
+                    Text(
+                        text = "${strategy.age_min}–${strategy.age_max} yrs",
+                        fontSize = 11.sp,
+                        color = colors.textPrimary.copy(alpha = 0.7f),
+                        fontWeight = FontWeight.Medium
+                    )
+                }
             }
 
-            Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+            Spacer(modifier = Modifier.height(8.dp))
+
+            // Progress section
+            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
                 Text(
                     text = "${strategy.completed_count}/${strategy.total_activities}",
                     fontSize = 12.sp,
-                    fontWeight = FontWeight.SemiBold,
+                    fontWeight = FontWeight.Bold,
                     color = colors.coral
                 )
                 LinearProgressIndicator(
                     progress = if (strategy.total_activities > 0)
-                        strategy.completed_count.toFloat() / strategy.total_activities else 0f,
+                        (strategy.completed_count.toFloat() / strategy.total_activities).coerceIn(0f, 1f)
+                    else 0f,
                     modifier = Modifier
                         .fillMaxWidth()
                         .height(6.dp)
@@ -363,34 +544,68 @@ private fun StrategyCard(
                     trackColor = colors.coral.copy(alpha = 0.2f)
                 )
             }
+
+            Spacer(modifier = Modifier.height(8.dp))
+
+            // Action button - Click to view all activities
+            Button(
+                onClick = onClick,
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(40.dp),
+                colors = ButtonDefaults.buttonColors(
+                    containerColor = colors.coral.copy(alpha = 0.9f)
+                ),
+                shape = RoundedCornerShape(10.dp),
+                contentPadding = PaddingValues(0.dp)
+            ) {
+                Icon(
+                    imageVector = Icons.Default.ArrowForward,
+                    contentDescription = "View activities",
+                    modifier = Modifier.size(16.dp),
+                    tint = MaterialTheme.colorScheme.onPrimary
+                )
+                Spacer(modifier = Modifier.width(4.dp))
+                Text(
+                    text = "View All",
+                    fontSize = 12.sp,
+                    fontWeight = FontWeight.SemiBold,
+                    color = MaterialTheme.colorScheme.onPrimary
+                )
+            }
         }
     }
 }
 
+/**
+ * Loading state card
+ */
 @Composable
 private fun LoadingCard() {
     Box(
         modifier = Modifier
             .fillMaxWidth()
-            .height(120.dp)
-            .padding(horizontal = 16.dp)
-            .background(LocalAppColors.current.bgSurface, RoundedCornerShape(16.dp)),
+            .height(160.dp)
+            .clip(RoundedCornerShape(16.dp))
+            .background(LocalAppColors.current.bgSurface),
         contentAlignment = Alignment.Center
     ) {
         CircularProgressIndicator(color = LocalAppColors.current.coral)
     }
 }
 
+/**
+ * Error state card
+ */
 @Composable
 private fun ErrorCard(message: String) {
     Card(
-        modifier = Modifier
-            .fillMaxWidth()
-            .padding(horizontal = 16.dp),
+        modifier = Modifier.fillMaxWidth(),
         colors = CardDefaults.cardColors(
             containerColor = LocalAppColors.current.red.copy(alpha = 0.1f)
         ),
-        elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
+        elevation = CardDefaults.cardElevation(defaultElevation = 2.dp),
+        shape = RoundedCornerShape(12.dp)
     ) {
         Row(
             verticalAlignment = Alignment.CenterVertically,
