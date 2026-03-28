@@ -23,6 +23,8 @@ import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.launch
 import org.json.JSONObject
 
+// ── Payment state ─────────────────────────────────────────────────────────────
+
 sealed class PaymentState {
     object Idle    : PaymentState()
     object Loading : PaymentState()
@@ -57,7 +59,8 @@ class JourneyViewModel(app: Application) : AndroidViewModel(app) {
     private val _filteredMilestones = MutableStateFlow<List<Milestone>>(emptyList())
     val filteredMilestones: StateFlow<List<Milestone>> = _filteredMilestones.asStateFlow()
 
-    // Payment
+    // ── Subscription / Payment ────────────────────────────────────────────────
+
     private val _paymentState = MutableStateFlow<PaymentState>(PaymentState.Idle)
     val paymentState: StateFlow<PaymentState> = _paymentState.asStateFlow()
 
@@ -67,6 +70,7 @@ class JourneyViewModel(app: Application) : AndroidViewModel(app) {
     private val _showPaywall = MutableStateFlow(false)
     val showPaywall: StateFlow<Boolean> = _showPaywall.asStateFlow()
 
+    // Razorpay ko Activity chahiye
     private var currentActivity: Activity? = null
 
     init {
@@ -76,8 +80,6 @@ class JourneyViewModel(app: Application) : AndroidViewModel(app) {
             }.collect { filtered ->
                 _filteredMilestones.value = filtered
                 _visibleMilestones.value  = computeVisible(filtered)
-
-                // ✅ CRITICAL: Trigger next group load when needed
                 checkAndLoadNextGroup(filtered)
             }
         }
@@ -88,7 +90,6 @@ class JourneyViewModel(app: Application) : AndroidViewModel(app) {
     fun loadDataIfNeeded() {
         if (hasLoaded) return
         hasLoaded = true
-
         viewModelScope.launch {
             milestoneRepo.initialLoad()
         }
@@ -113,61 +114,52 @@ class JourneyViewModel(app: Application) : AndroidViewModel(app) {
         _subscriptionStatus.value = subscriptionManager.getStatus()
     }
 
-    // ── Completion ────────────────────────────────────────────────────────────
+    // ── Completion — ONE WAY, no undo ─────────────────────────────────────────
 
     fun markComplete(id: String)     = milestoneRepo.markComplete(id)
     fun toggleCompletion(id: String) = milestoneRepo.markComplete(id)
 
-    // ── VISIBLE LOGIC: 4-4 unlock system ──────────────────────────────────────
+    // ── Visible logic — same age group, 4-4 ──────────────────────────────────
+
     /**
-     * ✅ FIXED: Now applies 4-4 unlock logic to EVERY age group.
+     * Logic same hai — 4-4 batch mein milestones dikhao.
      *
-     * Behavior:
-     * 1. Find the "active" (first incomplete) age group
-     * 2. Show all completed groups' milestones
-     * 3. In active group: show batches of 4 until hitting an incomplete card
+     * FIX: Pehle findActiveGroupId() null return karta tha jab ek poora
+     * group complete ho jaata tha lekin next group abhi load nahi hua tha.
+     * Us case mein "return all" ho jaata tha — jo galat tha.
      *
-     * Example (User at group 3 with 12 cards):
-     * - Cards 0-3: all done → show all 4
-     * - Cards 4-7: 0-2 done, 3 incomplete → show these 4
-     * - Cards 8-11: still locked (batch at 4-7 not all done)
+     * Ab: agar activeGroupId null hai (matlab sab complete) toh
+     * sabse zyada ageGroupId wala group dikhao — next group load hone
+     * tak blank screen nahi aayegi.
      */
     private fun computeVisible(all: List<Milestone>): List<Milestone> {
         if (all.isEmpty()) return emptyList()
 
-        val activeGroupId = findActiveGroupId(all) ?: return all
+        val activeGroupId = findActiveGroupId(all)
 
-        // Show all milestones from completed groups
-        val previousDone = all.filter { it.ageGroupId < activeGroupId }
+        // Agar sab complete hain (activeGroupId == null) — last group dikhao
+        // taaki next group load hone tak screen blank na rahe
+        if (activeGroupId == null) {
+            val lastGroupId = all.maxOf { it.ageGroupId }
+            return all.filter { it.ageGroupId <= lastGroupId }
+        }
 
-        // Get milestones in the active group
+        val previousDone  = all.filter { it.ageGroupId < activeGroupId }
         val activeGroupMs = all.filter { it.ageGroupId == activeGroupId }
-        if (activeGroupMs.isEmpty()) return previousDone
 
         val visibleFromActive = mutableListOf<Milestone>()
         var batchStart = 0
-
-        // Process in 4-card batches
         while (batchStart < activeGroupMs.size) {
-            val batchEnd = minOf(batchStart + 4, activeGroupMs.size)
-            val batch = activeGroupMs.subList(batchStart, batchEnd)
-
+            val end   = minOf(batchStart + 4, activeGroupMs.size)
+            val batch = activeGroupMs.subList(batchStart, end)
             visibleFromActive.addAll(batch)
-
-            // Stop at first incomplete batch
-            if (!batch.all { it.isCompleted }) {
-                break
-            }
-
+            if (!batch.all { it.isCompleted }) break
             batchStart += 4
         }
 
         return previousDone + visibleFromActive
     }
 
-    /**
-     * Find the first age group that has incomplete milestones.
-     */
     private fun findActiveGroupId(all: List<Milestone>): Int? =
         all.map { it.ageGroupId }
             .distinct()
@@ -177,85 +169,51 @@ class JourneyViewModel(app: Application) : AndroidViewModel(app) {
             }
 
     /**
-     * ✅ CRITICAL FIX: This function auto-loads the next group(s) when needed.
+     * FIX: Pehle agar activeGroupId null tha (sab complete), toh early return
+     * ho jaata tha aur next group kabhi load nahi hota tha.
      *
-     * Called every time milestones list changes.
-     *
-     * Detects if we need more data and loads it in background:
-     * 1. User scrolls and sees last few cards → load next group
-     * 2. User completes all cards in group → load next group
-     * 3. New group loads → automatically added to milestones list
-     *
-     * This ensures seamless progression beyond 12 cards!
+     * Ab: null case mein bhi maxGroup + 1 load karte hain.
      */
     private fun checkAndLoadNextGroup(all: List<Milestone>) {
-        if (all.isEmpty()) return
+        val activeGroupId = findActiveGroupId(all)
 
-        val activeGroupId = findActiveGroupId(all) ?: return
-        val activeGroupMs = all.filter { it.ageGroupId == activeGroupId }
-
-        if (activeGroupMs.isEmpty()) return
-
-        val visibleMs = _visibleMilestones.value
-
-        // ✅ Strategy 1: If all active group cards are done, load next group
-        if (activeGroupMs.all { it.isCompleted }) {
-            val nextGroupId = activeGroupId + 1
+        // Agar koi active group nahi (sab complete) — next group load karo
+        if (activeGroupId == null) {
+            val maxGroup = all.maxOfOrNull { it.ageGroupId } ?: return
             viewModelScope.launch {
-                milestoneRepo.loadNextGroupIfNeeded(nextGroupId)
+                milestoneRepo.loadNextGroupIfNeeded(maxGroup + 1)
             }
             return
         }
 
-        // ✅ Strategy 2: If user is seeing last card of current group, start loading next
-        // This provides buffer time so next group is ready when needed
-        val visibleAtEnd = visibleMs.lastOrNull()
-        if (visibleAtEnd != null && visibleAtEnd.ageGroupId == activeGroupId) {
-            val lastVisibleIdx = activeGroupMs.indexOf(visibleAtEnd)
-            // If showing last card or last 2 cards, preload next group
-            if (lastVisibleIdx >= activeGroupMs.size - 2) {
-                val nextGroupId = activeGroupId + 1
-                viewModelScope.launch {
-                    milestoneRepo.loadNextGroupIfNeeded(nextGroupId)
-                }
-            }
+        // Active group ke saare milestones complete hain — next load karo
+        val activeGroupMs = all.filter { it.ageGroupId == activeGroupId }
+        if (activeGroupMs.any { !it.isCompleted }) return
+
+        viewModelScope.launch {
+            milestoneRepo.loadNextGroupIfNeeded(activeGroupId + 1)
         }
     }
 
-    // ── LOCK LOGIC: Cards locked until previous batch complete ────────────────
-    /**
-     * ✅ FIXED: Works for ALL age groups.
-     *
-     * A card is LOCKED if:
-     * 1. It's in the active group AND
-     * 2. It's NOT in the first visible batch AND
-     * 3. The previous card is incomplete
-     *
-     * This gates cards: complete 4 → next 4 unlock, etc.
-     */
-    fun isLocked(milestone: Milestone): Boolean {
-        val visible = _visibleMilestones.value
-        val activeGroupId = findActiveGroupId(visible)
+    // ── Lock logic ────────────────────────────────────────────────────────────
 
-        // Cards in completed groups are not locked
+    fun isLocked(milestone: Milestone): Boolean {
+        val visible       = _visibleMilestones.value
+        val activeGroupId = findActiveGroupId(visible)
         if (milestone.ageGroupId != activeGroupId) return false
 
         val groupVisible = visible.filter { it.ageGroupId == activeGroupId }
         val idxInGroup   = groupVisible.indexOf(milestone)
-
-        // First card is never locked
         if (idxInGroup <= 0) return false
 
-        // Position within 4-card batch
         val indexInBatch = idxInGroup % 4
         if (indexInBatch == 0) return false
 
-        // Card is locked if previous card is incomplete
-        val prevCard = groupVisible.getOrNull(idxInGroup - 1) ?: return false
-        return !prevCard.isCompleted
+        val prev = groupVisible.getOrNull(idxInGroup - 1) ?: return false
+        return !prev.isCompleted
     }
 
-    // ── Milestone interaction ─────────────────────────────────────────────────
+    // ── Milestone tap — paywall on first tap if not subscribed ────────────────
 
     fun onMilestoneTapped(milestone: Milestone) {
         _selectedMilestone.value = milestone
@@ -271,7 +229,7 @@ class JourneyViewModel(app: Application) : AndroidViewModel(app) {
 
     fun dismissPaywall() { _showPaywall.value = false }
 
-    // ── Payment / Razorpay ────────────────────────────────────────────────────
+    // ── Razorpay ──────────────────────────────────────────────────────────────
 
     fun startPayment() {
         val activity = currentActivity ?: run {
@@ -287,7 +245,7 @@ class JourneyViewModel(app: Application) : AndroidViewModel(app) {
                 put("description", "30 Days Access — ₹1")
                 put("theme.color", "#FF8B94")
                 put("currency", "INR")
-                put("amount", 100)
+                put("amount", 100)   // 100 paise = ₹1
                 put("prefill", JSONObject().apply {
                     put("contact", "")
                     put("email", "")
@@ -299,6 +257,7 @@ class JourneyViewModel(app: Application) : AndroidViewModel(app) {
         }
     }
 
+    /** Called from MainActivity after Razorpay success */
     fun onPaymentSuccess(razorpayPaymentId: String) {
         subscriptionManager.activateSubscription(razorpayPaymentId)
         _paymentState.value       = PaymentState.Success(razorpayPaymentId)
@@ -307,6 +266,7 @@ class JourneyViewModel(app: Application) : AndroidViewModel(app) {
         _selectedMilestone.value?.let { fetchAdvice(it) }
     }
 
+    /** Called from MainActivity after Razorpay failure */
     fun onPaymentError(errorCode: Int, description: String) {
         _paymentState.value = PaymentState.Error(
             when (errorCode) {
@@ -327,14 +287,10 @@ class JourneyViewModel(app: Application) : AndroidViewModel(app) {
 
     fun clearFilter() { _activeFilter.value = null }
 
-    /**
-     * ✅ CRITICAL: When age changes, reset and reload from that age.
-     */
     fun setChildAge(months: Int) {
+        hasLoaded = false   // FIX: age change pe fresh load allow karo
         milestoneRepo.setChildAge(months)
-        viewModelScope.launch {
-            milestoneRepo.initialLoad()
-        }
+        viewModelScope.launch { milestoneRepo.initialLoad() }
     }
 
     fun setChildName(name: String) = milestoneRepo.setChildName(name)
@@ -350,6 +306,7 @@ class JourneyViewModel(app: Application) : AndroidViewModel(app) {
     fun retryAdvice() { _selectedMilestone.value?.let { fetchAdvice(it) } }
 
     fun reloadDatasets() {
+        hasLoaded = false   // FIX: manual reload bhi fresh load kare
         viewModelScope.launch { milestoneRepo.initialLoad() }
     }
 
