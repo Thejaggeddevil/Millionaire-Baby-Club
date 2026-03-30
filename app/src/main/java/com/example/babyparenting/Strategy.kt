@@ -24,6 +24,8 @@ data class Strategy(
     @SerializedName("icon")
     val icon: String? = null,
 
+    @SerializedName("is_locked")
+    val is_locked: Boolean = false,
     @SerializedName("completed_count")
     val completed_count: Int = 0,
 

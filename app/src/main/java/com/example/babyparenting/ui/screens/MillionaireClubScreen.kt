@@ -13,6 +13,7 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.rotate
 import androidx.compose.ui.graphics.Brush
@@ -149,7 +150,7 @@ private fun ClubHeader(colors: AppColorScheme) {
         ) {
             Column {
                 Text(
-                    "🌟 Millionaire Baby Club",
+                    "Millionaire Baby Club",
                     fontSize = 18.sp,
                     fontWeight = FontWeight.ExtraBold,
                     color = colors.textPrimary
@@ -509,195 +510,246 @@ private fun StrategyJourneyItem(
     colors: AppColorScheme,
     onClick: () -> Unit
 ) {
-    val isCompleted = strategy.completed_count > 0 &&
-            strategy.completed_count == strategy.total_activities
-    val hasProgress = strategy.completed_count > 0 && !isCompleted
-    val isLeft = index % 2 == 0
+    val isCompleted  = strategy.total_activities > 0 &&
+            strategy.completed_count >= strategy.total_activities
+    val hasProgress  = strategy.completed_count > 0 && !isCompleted
+    val isLocked     = strategy.is_locked
+    val isLeft       = index % 2 == 0
 
-    // Alternate left/right layout like journey map
+    // 3-column: [left card slot] [44dp center node] [right card slot]
     Row(
-        modifier  = Modifier.fillMaxWidth(),
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(horizontal = 4.dp),
         verticalAlignment = Alignment.Top
     ) {
-        if (!isLeft) Spacer(Modifier.weight(1f))
-
-        Column(
-            modifier  = Modifier.weight(1.4f),
-            horizontalAlignment = if (isLeft) Alignment.Start else Alignment.End
+        // LEFT slot
+        Box(
+            modifier = Modifier.weight(1f),
+            contentAlignment = Alignment.CenterEnd
         ) {
-            // Node + connector
-            Row(
-                verticalAlignment = Alignment.Top,
-                horizontalArrangement = if (isLeft)
-                    Arrangement.Start else Arrangement.End,
-                modifier = Modifier.fillMaxWidth()
-            ) {
-                if (!isLeft) {
-                    // Connector line (right side)
-                    StrategyCard(
-                        strategy  = strategy,
-                        isLeft    = false,
-                        isCompleted = isCompleted,
-                        hasProgress = hasProgress,
-                        colors    = colors,
-                        onClick   = onClick
-                    )
-                    Spacer(Modifier.width(8.dp))
-                }
-
-                // Node circle
-                Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                    Box(
-                        contentAlignment = Alignment.Center,
-                        modifier = Modifier
-                            .size(40.dp)
-                            .clip(CircleShape)
-                            .background(
-                                when {
-                                    isCompleted -> colors.coral
-                                    hasProgress -> colors.coral.copy(alpha = 0.4f)
-                                    else        -> colors.bgSurface
-                                }
-                            )
-                            .border(
-                                2.dp,
-                                if (isCompleted || hasProgress) colors.coral
-                                else colors.textPrimary.copy(alpha = 0.2f),
-                                CircleShape
-                            )
-                    ) {
-                        when {
-                            isCompleted -> Icon(
-                                Icons.Default.Check,
-                                null,
-                                tint = Color.White,
-                                modifier = Modifier.size(20.dp)
-                            )
-                            else -> Text(
-                                "${index + 1}",
-                                fontSize = 12.sp,
-                                fontWeight = FontWeight.Bold,
-                                color = if (hasProgress) colors.coral else colors.textPrimary.copy(alpha = 0.5f)
-                            )
-                        }
-                    }
-
-                    // Connector line going down
-                    if (!isLast) {
-                        Box(
-                            modifier = Modifier
-                                .width(2.dp)
-                                .height(if (strategy.description.length > 60) 90.dp else 70.dp)
-                                .background(
-                                    Brush.verticalGradient(
-                                        listOf(
-                                            if (isCompleted) colors.coral else colors.coral.copy(alpha = 0.3f),
-                                            colors.coral.copy(alpha = 0.1f)
-                                        )
-                                    )
-                                )
-                        )
-                    }
-                }
-
-                if (isLeft) {
-                    Spacer(Modifier.width(8.dp))
-                    StrategyCard(
-                        strategy    = strategy,
-                        isLeft      = true,
-                        isCompleted = isCompleted,
-                        hasProgress = hasProgress,
-                        colors      = colors,
-                        onClick     = onClick
-                    )
-                }
+            if (isLeft) {
+                StrategyCard(
+                    strategy    = strategy,
+                    isCompleted = isCompleted,
+                    hasProgress = hasProgress,
+                    isLocked    = isLocked,
+                    colors      = colors,
+                    onClick     = { if (!isLocked) onClick() }
+                )
             }
         }
 
-        if (isLeft) Spacer(Modifier.weight(1f))
+        Spacer(Modifier.width(8.dp))
+
+        // CENTER node + vertical connector
+        Column(
+            horizontalAlignment = Alignment.CenterHorizontally,
+            modifier = Modifier.width(44.dp)
+        ) {
+            Box(
+                contentAlignment = Alignment.Center,
+                modifier = Modifier
+                    .size(40.dp)
+                    .clip(CircleShape)
+                    .background(
+                        when {
+                            isLocked    -> colors.bgSurface
+                            isCompleted -> colors.coral
+                            hasProgress -> colors.coral.copy(alpha = 0.25f)
+                            else        -> colors.bgSurface
+                        }
+                    )
+                    .border(
+                        width = if (isLocked) 1.5.dp else 2.dp,
+                        color = when {
+                            isLocked    -> colors.textPrimary.copy(alpha = 0.15f)
+                            isCompleted -> colors.coral
+                            hasProgress -> colors.coral.copy(alpha = 0.6f)
+                            else        -> colors.coral.copy(alpha = 0.35f)
+                        },
+                        shape = CircleShape
+                    )
+            ) {
+                when {
+                    isLocked -> Icon(
+                        Icons.Default.Lock,
+                        contentDescription = null,
+                        tint = colors.textPrimary.copy(alpha = 0.3f),
+                        modifier = Modifier.size(16.dp)
+                    )
+                    isCompleted -> Icon(
+                        Icons.Default.Check,
+                        contentDescription = null,
+                        tint = Color.White,
+                        modifier = Modifier.size(20.dp)
+                    )
+                    else -> Text(
+                        text = "${index + 1}",
+                        fontSize = 13.sp,
+                        fontWeight = FontWeight.Bold,
+                        color = if (hasProgress) colors.coral
+                        else colors.coral.copy(alpha = 0.7f)
+                    )
+                }
+            }
+
+            if (!isLast) {
+                Box(
+                    modifier = Modifier
+                        .width(2.dp)
+                        .height(if (strategy.description.length > 60) 90.dp else 70.dp)
+                        .background(
+                            Brush.verticalGradient(
+                                listOf(
+                                    if (isCompleted) colors.coral
+                                    else colors.coral.copy(alpha = 0.25f),
+                                    colors.coral.copy(alpha = 0.06f)
+                                )
+                            )
+                        )
+                )
+            }
+        }
+
+        Spacer(Modifier.width(8.dp))
+
+        // RIGHT slot
+        Box(
+            modifier = Modifier.weight(1f),
+            contentAlignment = Alignment.CenterStart
+        ) {
+            if (!isLeft) {
+                StrategyCard(
+                    strategy    = strategy,
+                    isCompleted = isCompleted,
+                    hasProgress = hasProgress,
+                    isLocked    = isLocked,
+                    colors      = colors,
+                    onClick     = { if (!isLocked) onClick() }
+                )
+            }
+        }
     }
 }
 
 @Composable
 private fun StrategyCard(
     strategy: Strategy,
-    isLeft: Boolean,
     isCompleted: Boolean,
     hasProgress: Boolean,
+    isLocked: Boolean,
     colors: AppColorScheme,
     onClick: () -> Unit
 ) {
+    val cardAlpha = if (isLocked) 0.45f else 1f
+
     Card(
         modifier = Modifier
-            .widthIn(max = 180.dp)
+            .fillMaxWidth()
             .clip(RoundedCornerShape(12.dp))
-            .clickable(onClick = onClick),
+            .clickable(enabled = !isLocked, onClick = onClick),
         colors = CardDefaults.cardColors(
             containerColor = when {
+                isLocked    -> colors.bgSurface
                 isCompleted -> colors.coral.copy(alpha = 0.1f)
                 hasProgress -> colors.bgSurface
                 else        -> colors.bgSurface
             }
         ),
-        elevation = CardDefaults.cardElevation(2.dp),
-        border = if (isCompleted)
-            BorderStroke(1.5.dp, colors.coral.copy(alpha = 0.4f))
-        else if (hasProgress)
-            BorderStroke(1.dp, colors.coral.copy(alpha = 0.2f))
-        else null,
+        elevation = CardDefaults.cardElevation(if (isLocked) 0.dp else 2.dp),
+        border = when {
+            isLocked    -> BorderStroke(1.dp, colors.textPrimary.copy(alpha = 0.1f))
+            isCompleted -> BorderStroke(1.5.dp, colors.coral.copy(alpha = 0.4f))
+            hasProgress -> BorderStroke(1.dp, colors.coral.copy(alpha = 0.25f))
+            else        -> BorderStroke(1.dp, colors.textPrimary.copy(alpha = 0.08f))
+        },
         shape = RoundedCornerShape(12.dp)
     ) {
         Column(
-            modifier = Modifier.padding(12.dp),
-            verticalArrangement = Arrangement.spacedBy(6.dp)
+            modifier = Modifier
+                .padding(10.dp)
+                .alpha(cardAlpha),
+            verticalArrangement = Arrangement.spacedBy(5.dp)
         ) {
-            Text(
-                text = strategy.title,
-                fontSize = 12.sp,
-                fontWeight = FontWeight.Bold,
-                color = colors.textPrimary,
-                maxLines = 2,
-                lineHeight = 16.sp
-            )
+            // Title row
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.Top
+            ) {
+                Text(
+                    text = strategy.title,
+                    fontSize = 11.sp,
+                    fontWeight = FontWeight.Bold,
+                    color = if (isLocked) colors.textPrimary.copy(alpha = 0.4f)
+                    else colors.textPrimary,
+                    maxLines = 3,
+                    lineHeight = 15.sp,
+                    modifier = Modifier.weight(1f)
+                )
+                if (!isLocked) {
+                    Icon(
+                        Icons.Default.ChevronRight,
+                        contentDescription = null,
+                        tint = colors.coral.copy(alpha = 0.5f),
+                        modifier = Modifier.size(14.dp).padding(top = 2.dp)
+                    )
+                }
+            }
 
-            if (strategy.description.isNotBlank()) {
+            if (strategy.description.isNotBlank() && !isLocked) {
                 Text(
                     text = strategy.description,
                     fontSize = 10.sp,
-                    color = colors.textPrimary.copy(alpha = 0.55f),
+                    color = colors.textPrimary.copy(alpha = 0.5f),
                     maxLines = 2,
                     lineHeight = 14.sp
                 )
             }
 
-            // Progress row
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.CenterVertically
-            ) {
+            if (isLocked) {
                 Text(
-                    "${strategy.completed_count}/${strategy.total_activities}",
-                    fontSize = 10.sp,
-                    fontWeight = FontWeight.SemiBold,
-                    color = colors.coral
-                )
-                Text(
-                    "Age ${strategy.age_min}–${strategy.age_max}",
+                    "Complete previous to unlock",
                     fontSize = 9.sp,
-                    color = colors.textPrimary.copy(alpha = 0.4f)
+                    color = colors.textPrimary.copy(alpha = 0.35f),
+                    lineHeight = 13.sp
                 )
-            }
+            } else {
+                // Progress count + age
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Text(
+                        "${strategy.completed_count}/${strategy.total_activities}",
+                        fontSize = 10.sp,
+                        fontWeight = FontWeight.SemiBold,
+                        color = if (isCompleted) Color(0xFF4CAF50) else colors.coral
+                    )
+                    if (strategy.age_max > 0) {
+                        Text(
+                            "Age ${strategy.age_min}–${strategy.age_max}",
+                            fontSize = 9.sp,
+                            color = colors.textPrimary.copy(alpha = 0.35f)
+                        )
+                    }
+                }
 
-            // Mini progress bar
-            LinearProgressIndicator(
-                progress = if (strategy.total_activities > 0)
-                    (strategy.completed_count.toFloat() / strategy.total_activities).coerceIn(0f, 1f)
-                else 0f,
-                modifier   = Modifier.fillMaxWidth().height(4.dp).clip(RoundedCornerShape(2.dp)),
-                color      = colors.coral,
-                trackColor = colors.coral.copy(alpha = 0.15f)
-            )
+                // Progress bar — only shown when there are real activities
+                if (strategy.total_activities > 0) {
+                    LinearProgressIndicator(
+                        progress = (strategy.completed_count.toFloat() / strategy.total_activities).coerceIn(0f, 1f),
+                        modifier   = Modifier
+                            .fillMaxWidth()
+                            .height(3.dp)
+                            .clip(RoundedCornerShape(2.dp)),
+                        color      = if (isCompleted) Color(0xFF4CAF50) else colors.coral,
+                        trackColor = colors.coral.copy(alpha = 0.12f)
+                    )
+                }
+            }
         }
     }
 }

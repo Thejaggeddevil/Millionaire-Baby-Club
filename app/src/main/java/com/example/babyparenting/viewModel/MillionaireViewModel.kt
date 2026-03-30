@@ -85,7 +85,7 @@ class MillionaireViewModel @Inject constructor(
     private val _completedActivities = MutableStateFlow<Set<Int>>(emptySet())
     val completedActivities: StateFlow<Set<Int>> = _completedActivities.asStateFlow()
 
-    private val _childAge = MutableStateFlow(0)
+    private val _childAge = MutableStateFlow(24) // ✅ DEFAULT: 24 months (2 years) instead of 0
     val childAge: StateFlow<Int> = _childAge.asStateFlow()
 
     private val _currentStrategyId = MutableStateFlow(0)
@@ -122,12 +122,15 @@ class MillionaireViewModel @Inject constructor(
     }
 
     fun setChildAge(ageMonths: Int) {
-        _childAge.value = ageMonths
-        val ageYears = ageMonths / 12
-        Log.d("MillionaireVM", "🔄 Child age set to $ageMonths months ($ageYears years)")
+        // ✅ IMPORTANT: Always keep age >= 2 years (24 months) to show strategies
+        val validAge = if (ageMonths < 24) 24 else ageMonths
+
+        _childAge.value = validAge
+        val ageYears = validAge / 12.0
+        Log.d("MillionaireVM", "🔄 Child age set to $validAge months (${String.format("%.1f", ageYears)} years)")
         loadStrategies()
         val userId = UserManager.getUserId(context)
-        loadDailyActivity(userId, ageMonths)
+        loadDailyActivity(userId, validAge)
     }
 
     fun loadStrategies() {
@@ -135,24 +138,36 @@ class MillionaireViewModel @Inject constructor(
             try {
                 _strategiesState.value = StrategiesUiState.Loading
                 Log.d("MillionaireVM", "✅ Loading strategies from backend...")
+                val userId = UserManager.getUserId(context)
+                val allStrategies = repository.getStrategies(userId)
 
-                val allStrategies = repository.getStrategies()
-                val childAgeYears = _childAge.value / 12
+                // ✅ FIX: Proper age calculation
+                // - If age < 24 months, default to 24 (2 years) — minimum age for content
+                // - Otherwise use ceiling to round UP
+                val rawAge = _childAge.value
+                val childAgeYears = if (rawAge < 24) {
+                    2  // Default to 2 years
+                } else {
+                    kotlin.math.ceil(rawAge / 12.0).toInt()
+                }
+
+                Log.d("MillionaireVM", "🔍 Child age: $rawAge months → $childAgeYears years")
 
                 val filteredStrategies = allStrategies.filter { strategy ->
-                    if (_childAge.value == 0) {
-                        true
-                    } else {
-                        val min = strategy.age_min ?: 0
-                        val max = strategy.age_max ?: 999
-                        childAgeYears >= min && childAgeYears <= max
+                    val min = strategy.age_min ?: 2  // ✅ Default minimum is 2
+                    val max = strategy.age_max ?: 6  // ✅ Default maximum is 6
+                    val isInRange = childAgeYears >= min && childAgeYears <= max
+
+                    if (!isInRange) {
+                        Log.d("MillionaireVM", "❌ Filtered out: ${strategy.title} (requires age $min-$max, child is $childAgeYears)")
                     }
+                    isInRange
                 }
 
                 Log.d("MillionaireVM", "✅ Loaded ${filteredStrategies.size}/${allStrategies.size} strategies")
 
                 if (filteredStrategies.isEmpty()) {
-                    _strategiesState.value = StrategiesUiState.Error("No strategies found for this age")
+                    _strategiesState.value = StrategiesUiState.Error("No strategies found for age $childAgeYears. Please set a valid child age.")
                 } else {
                     _strategiesState.value = StrategiesUiState.Success(filteredStrategies)
                 }
@@ -171,22 +186,25 @@ class MillionaireViewModel @Inject constructor(
                 Log.d("MillionaireVM", "📋 Loading activities for strategy $strategyId...")
 
                 val allActivities = repository.getActivitiesForStrategy(strategyId)
-                val childAgeYears = _childAge.value / 12
+
+                // ✅ FIX: Use the same age logic
+                val rawAge = _childAge.value
+                val childAgeYears = if (rawAge < 24) {
+                    2
+                } else {
+                    kotlin.math.ceil(rawAge / 12.0).toInt()
+                }
 
                 val filteredActivities = allActivities.filter { activity ->
-                    if (_childAge.value == 0) {
-                        true
-                    } else {
-                        val min = activity.age_min ?: 0
-                        val max = activity.age_max ?: 999
-                        childAgeYears in min..max
-                    }
+                    val min = activity.age_min ?: 2
+                    val max = activity.age_max ?: 6
+                    childAgeYears in min..max
                 }
 
                 Log.d("MillionaireVM", "✅ Loaded ${filteredActivities.size}/${allActivities.size} activities")
 
                 if (filteredActivities.isEmpty()) {
-                    _activitiesState.value = ActivitiesUiState.Error("No activities found for this age group")
+                    _activitiesState.value = ActivitiesUiState.Error("No activities found for age group")
                 } else {
                     _activitiesState.value = ActivitiesUiState.Success(filteredActivities)
                 }

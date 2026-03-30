@@ -72,14 +72,15 @@ fun StrategyDetailScreen(
                 Column {
                     Text(
                         text = strategyTitle,
-                        fontSize = 16.sp,
-                        fontWeight = FontWeight.Bold,
+                        fontSize = 18.sp,
+                        fontWeight = FontWeight.ExtraBold,
                         color = colors.textPrimary,
                         maxLines = 1
                     )
                     Text(
                         text = "Activities",
-                        fontSize = 11.sp,
+                        fontSize = 12.sp,
+                        fontWeight = FontWeight.SemiBold,
                         color = colors.textPrimary.copy(alpha = 0.5f)
                     )
                 }
@@ -89,7 +90,8 @@ fun StrategyDetailScreen(
                     Icon(
                         Icons.AutoMirrored.Filled.ArrowBack,
                         contentDescription = "Back",
-                        tint = colors.textPrimary
+                        tint = colors.textPrimary,
+                        modifier = Modifier.size(26.dp)
                     )
                 }
             },
@@ -103,11 +105,12 @@ fun StrategyDetailScreen(
             is ActivitiesUiState.Loading -> {
                 Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
                     Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                        CircularProgressIndicator(color = colors.coral, modifier = Modifier.size(40.dp))
-                        Spacer(Modifier.height(12.dp))
+                        CircularProgressIndicator(color = colors.coral, modifier = Modifier.size(48.dp))
+                        Spacer(Modifier.height(16.dp))
                         Text(
                             "Loading activities...",
-                            fontSize = 13.sp,
+                            fontSize = 14.sp,
+                            fontWeight = FontWeight.Medium,
                             color = colors.textPrimary.copy(alpha = 0.5f)
                         )
                     }
@@ -120,19 +123,28 @@ fun StrategyDetailScreen(
                     contentAlignment = Alignment.Center
                 ) {
                     Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                        Text("⚠️", fontSize = 36.sp)
-                        Spacer(Modifier.height(8.dp))
+                        Text("⚠️", fontSize = 48.sp)
+                        Spacer(Modifier.height(12.dp))
                         Text(
                             state.message,
-                            fontSize = 14.sp,
+                            fontSize = 15.sp,
+                            fontWeight = FontWeight.SemiBold,
                             color = colors.red,
                             textAlign = TextAlign.Center
                         )
-                        Spacer(Modifier.height(16.dp))
+                        Spacer(Modifier.height(20.dp))
                         Button(
                             onClick = { viewModel.loadActivitiesForStrategy(strategyId) },
-                            colors  = ButtonDefaults.buttonColors(containerColor = colors.coral)
-                        ) { Text("Retry") }
+                            colors = ButtonDefaults.buttonColors(containerColor = colors.coral),
+                            modifier = Modifier
+                                .height(48.dp)
+                                .clip(RoundedCornerShape(12.dp)),
+                            shape = RoundedCornerShape(12.dp)
+                        ) {
+                            Icon(Icons.Default.Refresh, null, modifier = Modifier.size(18.dp))
+                            Spacer(Modifier.width(8.dp))
+                            Text("Retry", fontWeight = FontWeight.Bold, fontSize = 14.sp)
+                        }
                     }
                 }
             }
@@ -156,12 +168,12 @@ fun StrategyDetailScreen(
                         contentAlignment = Alignment.Center
                     ) {
                         Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                            Text("👶", fontSize = 40.sp)
+                            Text("👶", fontSize = 48.sp)
                             Spacer(Modifier.height(12.dp))
                             Text(
                                 "No activities for this age group",
-                                fontSize = 15.sp,
-                                fontWeight = FontWeight.SemiBold,
+                                fontSize = 16.sp,
+                                fontWeight = FontWeight.Bold,
                                 color = colors.textPrimary,
                                 textAlign = TextAlign.Center
                             )
@@ -206,203 +218,154 @@ private fun ActivitiesContent(
         verticalArrangement = Arrangement.spacedBy(0.dp)
     ) {
 
-        // ── Progress summary header ──────────────────────────────────────────
+        // ── Header ──────────────────────────────────────────────────────────
         item {
-            ProgressHeader(
-                completed = completedCount,
-                total     = activities.size,
-                colors    = colors
-            )
-            Spacer(Modifier.height(16.dp))
+            Card(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(bottom = 16.dp),
+                colors = CardDefaults.cardColors(
+                    containerColor = colors.coral.copy(alpha = 0.1f)
+                ),
+                shape = RoundedCornerShape(14.dp),
+                border = BorderStroke(1.5.dp, colors.coral.copy(alpha = 0.2f))
+            ) {
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(16.dp),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Column(
+                        verticalArrangement = Arrangement.spacedBy(4.dp)
+                    ) {
+                        Text(
+                            "Your Journey",
+                            fontSize = 13.sp,
+                            fontWeight = FontWeight.SemiBold,
+                            color = colors.textPrimary.copy(alpha = 0.6f)
+                        )
+                        Text(
+                            "$completedCount of ${activities.size} completed",
+                            fontSize = 16.sp,
+                            fontWeight = FontWeight.ExtraBold,
+                            color = colors.coral
+                        )
+                    }
+                    LinearProgressIndicator(
+                        progress = { completedCount.toFloat() / activities.size },
+                        modifier = Modifier
+                            .weight(1f)
+                            .height(6.dp)
+                            .clip(CircleShape)
+                            .padding(start = 16.dp),
+                        color = colors.coral,
+                        trackColor = colors.textPrimary.copy(alpha = 0.1f),
+                        strokeCap = androidx.compose.ui.graphics.StrokeCap.Round
+                    )
+                }
+            }
         }
 
-        // ── Activity items ───────────────────────────────────────────────────
+        // ── Activities ──────────────────────────────────────────────────────
         itemsIndexed(activities) { index, activity ->
             val isCompleted = completedActivities.contains(activity.id)
-            val isLocked = index > 0 &&
-                    !completedActivities.contains(activities[index - 1].id)
-            val isNext = !isCompleted && !isLocked &&
-                    (index == 0 || completedActivities.contains(activities[index - 1].id))
+            val isLocked = index > 0 && !completedActivities.contains(activities[index - 1].id)
+            val isNext = index > 0 && !isLocked && !isCompleted
+            val isFirst = index == 0
+            val isLast = index == activities.size - 1
 
             ActivityJourneyItem(
                 activity    = activity,
                 index       = index,
-                isLast      = index == activities.lastIndex,
                 isCompleted = isCompleted,
                 isLocked    = isLocked,
                 isNext      = isNext,
+                isFirst     = isFirst,
+                isLast      = isLast,
                 colors      = colors,
-                onClick = {
-                    if (!isLocked) {
-                        onActivityClick(activity.id ?: 0, strategyId)
-                    }
-                }
+                onClick     = { onActivityClick(activity.id!!, strategyId) }
             )
         }
 
-        item { Spacer(Modifier.height(24.dp)) }
+        item { Spacer(Modifier.height(16.dp)) }
     }
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// PROGRESS HEADER CARD
-// ─────────────────────────────────────────────────────────────────────────────
-
-@Composable
-private fun ProgressHeader(
-    completed: Int,
-    total: Int,
-    colors: AppColorScheme
-) {
-    val progress by animateFloatAsState(
-        targetValue   = if (total > 0) completed.toFloat() / total else 0f,
-        animationSpec = tween(600)
-    )
-
-    Card(
-        modifier  = Modifier.fillMaxWidth(),
-        colors    = CardDefaults.cardColors(containerColor = colors.bgSurface),
-        shape     = RoundedCornerShape(14.dp),
-        elevation = CardDefaults.cardElevation(2.dp)
-    ) {
-        Column(
-            modifier = Modifier
-                .fillMaxWidth()
-                .background(
-                    Brush.horizontalGradient(
-                        listOf(colors.coral.copy(alpha = 0.07f), Color.Transparent)
-                    )
-                )
-                .padding(14.dp),
-            verticalArrangement = Arrangement.spacedBy(10.dp)
-        ) {
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                Text(
-                    "Strategy Progress",
-                    fontSize = 13.sp,
-                    fontWeight = FontWeight.Bold,
-                    color = colors.textPrimary
-                )
-                Surface(
-                    color    = colors.coral.copy(alpha = 0.15f),
-                    modifier = Modifier.clip(RoundedCornerShape(20.dp))
-                ) {
-                    Text(
-                        "$completed / $total",
-                        fontSize = 11.sp,
-                        fontWeight = FontWeight.Bold,
-                        color = colors.coral,
-                        modifier = Modifier.padding(horizontal = 10.dp, vertical = 4.dp)
-                    )
-                }
-            }
-
-            LinearProgressIndicator(
-                progress  = progress,
-                modifier  = Modifier.fillMaxWidth().height(7.dp).clip(RoundedCornerShape(4.dp)),
-                color      = colors.coral,
-                trackColor = colors.coral.copy(alpha = 0.15f)
-            )
-
-            if (completed == total && total > 0) {
-                Row(
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(6.dp)
-                ) {
-                    Text("🎉", fontSize = 14.sp)
-                    Text(
-                        "Strategy completed!",
-                        fontSize = 12.sp,
-                        fontWeight = FontWeight.SemiBold,
-                        color = colors.coral
-                    )
-                }
-            }
-        }
-    }
-}
-
-// ─────────────────────────────────────────────────────────────────────────────
-// ACTIVITY JOURNEY ITEM  —  node + connector + card
+// ACTIVITY JOURNEY ITEM
 // ─────────────────────────────────────────────────────────────────────────────
 
 @Composable
 private fun ActivityJourneyItem(
     activity: Activity,
     index: Int,
-    isLast: Boolean,
     isCompleted: Boolean,
     isLocked: Boolean,
     isNext: Boolean,
+    isFirst: Boolean,
+    isLast: Boolean,
     colors: AppColorScheme,
     onClick: () -> Unit
 ) {
-    val alpha by animateFloatAsState(if (isLocked) 0.5f else 1f)
+    val alpha = when {
+        isCompleted -> 1f
+        isNext      -> 1f
+        isLocked    -> 0.6f
+        else        -> 1f
+    }
 
     Row(
-        modifier = Modifier.fillMaxWidth(),
-        horizontalArrangement = Arrangement.spacedBy(12.dp),
-        verticalAlignment = Alignment.Top
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(bottom = if (!isLast) 0.dp else 0.dp)
+            .alpha(alpha),
+        horizontalArrangement = Arrangement.spacedBy(12.dp)
     ) {
-        // ── Left: node + connector ───────────────────────────────────────────
-        Column(
-            horizontalAlignment = Alignment.CenterHorizontally,
-            modifier = Modifier.width(40.dp)
-        ) {
-            // Pulse animation for "next" activity
-            val infiniteTransition = rememberInfiniteTransition()
-            val pulseScale by infiniteTransition.animateFloat(
-                initialValue = 1f,
-                targetValue  = if (isNext) 1.15f else 1f,
-                animationSpec = infiniteRepeatable(tween(700, easing = EaseInOutSine), RepeatMode.Reverse)
-            )
 
-            // Node circle
+        // ── Left: Circle + Line ──────────────────────────────────────────────
+        Column(
+            modifier = Modifier.width(40.dp),
+            horizontalAlignment = Alignment.CenterHorizontally,
+            verticalArrangement = Arrangement.spacedBy(0.dp)
+        ) {
+            // Circle indicator
             Box(
-                contentAlignment = Alignment.Center,
                 modifier = Modifier
-                    .size(40.dp)
-                    .scale(pulseScale)
+                    .size(42.dp)
                     .clip(CircleShape)
                     .background(
                         when {
                             isCompleted -> colors.coral
                             isNext      -> colors.coral.copy(alpha = 0.2f)
+                            isLocked    -> colors.textPrimary.copy(alpha = 0.08f)
                             else        -> colors.bgSurface
                         }
                     )
                     .border(
-                        width = if (isNext) 2.dp else 1.5.dp,
+                        width = if (isNext) 2.5.dp else 2.dp,
                         color = when {
                             isCompleted -> colors.coral
                             isNext      -> colors.coral
-                            isLocked    -> colors.textPrimary.copy(alpha = 0.15f)
-                            else        -> colors.textPrimary.copy(alpha = 0.2f)
+                            isLocked    -> colors.textPrimary.copy(alpha = 0.2f)
+                            else        -> colors.textPrimary.copy(alpha = 0.15f)
                         },
                         shape = CircleShape
-                    )
+                    ),
+                contentAlignment = Alignment.Center
             ) {
                 when {
                     isCompleted -> Icon(
                         Icons.Default.Check,
-                        null,
+                        contentDescription = "Completed",
                         tint = Color.White,
                         modifier = Modifier.size(20.dp)
                     )
-                    isLocked -> Icon(
-                        Icons.Default.Lock,
-                        null,
-                        tint = colors.textPrimary.copy(alpha = 0.3f),
-                        modifier = Modifier.size(16.dp)
-                    )
                     else -> Text(
                         "${index + 1}",
-                        fontSize = 13.sp,
-                        fontWeight = FontWeight.Bold,
+                        fontSize = 16.sp,
+                        fontWeight = FontWeight.ExtraBold,
                         color = if (isNext) colors.coral else colors.textPrimary.copy(alpha = 0.5f)
                     )
                 }
@@ -412,12 +375,12 @@ private fun ActivityJourneyItem(
             if (!isLast) {
                 Box(
                     modifier = Modifier
-                        .width(2.dp)
+                        .width(2.5.dp)
                         .height(if ((activity.basic?.plan?.length ?: 0) > 80) 120.dp else 90.dp)
                         .background(
                             Brush.verticalGradient(
                                 listOf(
-                                    if (isCompleted) colors.coral else colors.coral.copy(alpha = 0.25f),
+                                    if (isCompleted) colors.coral else colors.coral.copy(alpha = 0.2f),
                                     colors.coral.copy(alpha = 0.05f)
                                 )
                             )
@@ -454,32 +417,32 @@ private fun ActivityItemCard(
     onClick: () -> Unit
 ) {
     Card(
-        modifier  = Modifier
-            .fillMaxWidth()  // ← weight(1f) ki jagah yeh lagao
+        modifier = Modifier
+            .fillMaxWidth()
             .padding(bottom = 12.dp)
             .alpha(alpha)
-            .clip(RoundedCornerShape(12.dp))
+            .clip(RoundedCornerShape(14.dp))
             .clickable(enabled = !isLocked, onClick = onClick),
-        colors    = CardDefaults.cardColors(
+        colors = CardDefaults.cardColors(
             containerColor = when {
-                isCompleted -> colors.coral.copy(alpha = 0.07f)
+                isCompleted -> colors.coral.copy(alpha = 0.08f)
                 isNext      -> colors.bgSurface
                 else        -> colors.bgSurface
             }
         ),
-        shape = RoundedCornerShape(12.dp),
-        elevation = CardDefaults.cardElevation(if (isNext) 3.dp else 1.5.dp),
+        shape = RoundedCornerShape(14.dp),
+        elevation = CardDefaults.cardElevation(if (isNext) 3.5.dp else 1.5.dp),
         border = when {
             isCompleted -> BorderStroke(1.5.dp, colors.coral.copy(alpha = 0.5f))
-            isNext      -> BorderStroke(1.5.dp, colors.coral.copy(alpha = 0.35f))
+            isNext      -> BorderStroke(2.dp, colors.coral.copy(alpha = 0.4f))
             else        -> null
         }
     ) {
         Column(
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(12.dp),
-            verticalArrangement = Arrangement.spacedBy(8.dp)
+                .padding(14.dp),
+            verticalArrangement = Arrangement.spacedBy(10.dp)
         ) {
             // Header row
             Row(
@@ -489,19 +452,19 @@ private fun ActivityItemCard(
             ) {
                 Text(
                     text = activity.title ?: "Activity ${activity.id}",
-                    fontSize = 13.sp,
-                    fontWeight = FontWeight.SemiBold,
+                    fontSize = 14.sp,
+                    fontWeight = FontWeight.ExtraBold,
                     color = colors.textPrimary,
                     modifier = Modifier.weight(1f),
                     maxLines = 2,
-                    lineHeight = 17.sp
+                    lineHeight = 18.sp
                 )
 
                 // Status chip
                 when {
                     isCompleted -> StatusChip("✓ Done", colors.coral, colors)
-                    isNext      -> StatusChip("▶ Next", colors.coral.copy(alpha = 0.7f), colors)
-                    isLocked    -> StatusChip("🔒", colors.textPrimary.copy(alpha = 0.4f), colors)
+                    isNext      -> StatusChip("▶ Next", colors.coral.copy(alpha = 0.8f), colors)
+                    isLocked    -> StatusChip("🔒", colors.textPrimary.copy(alpha = 0.35f), colors)
                 }
             }
 
@@ -510,10 +473,11 @@ private fun ActivityItemCard(
                 if (plan.isNotBlank()) {
                     Text(
                         text = plan,
-                        fontSize = 11.sp,
-                        color = colors.textPrimary.copy(alpha = 0.6f),
+                        fontSize = 12.sp,
+                        fontWeight = FontWeight.Medium,
+                        color = colors.textPrimary.copy(alpha = 0.65f),
                         maxLines = 2,
-                        lineHeight = 15.sp
+                        lineHeight = 16.sp
                     )
                 }
             }
@@ -534,41 +498,62 @@ private fun ActivityItemCard(
                 // Level
                 Text(
                     "L${activity.level}",
-                    fontSize = 9.sp,
-                    color = colors.coral.copy(alpha = 0.6f),
-                    fontWeight = FontWeight.SemiBold
+                    fontSize = 10.sp,
+                    fontWeight = FontWeight.ExtraBold,
+                    color = colors.coral.copy(alpha = 0.7f)
                 )
             }
 
             // Action button
             Button(
-                onClick  = onClick,
-                enabled  = !isLocked,
-                modifier = Modifier.fillMaxWidth().height(36.dp),
-                colors   = ButtonDefaults.buttonColors(
-                    containerColor         = when {
+                onClick = onClick,
+                enabled = !isLocked,
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(40.dp),
+                colors = ButtonDefaults.buttonColors(
+                    containerColor = when {
                         isCompleted -> colors.textPrimary.copy(alpha = 0.08f)
                         else        -> colors.coral
                     },
                     disabledContainerColor = colors.textPrimary.copy(alpha = 0.08f)
                 ),
-                shape = RoundedCornerShape(8.dp),
-                contentPadding = PaddingValues(0.dp)
-            ) {
-                Text(
-                    text = when {
-                        isCompleted -> "✓ Completed"
-                        isLocked    -> "🔒 Complete previous first"
-                        else        -> "Start Activity →"
-                    },
-                    fontSize     = 11.sp,
-                    fontWeight   = FontWeight.SemiBold,
-                    color = when {
-                        isCompleted -> colors.textPrimary.copy(alpha = 0.4f)
-                        isLocked    -> colors.textPrimary.copy(alpha = 0.35f)
-                        else        -> Color.White
-                    }
+                shape = RoundedCornerShape(10.dp),
+                contentPadding = PaddingValues(0.dp),
+                elevation = ButtonDefaults.buttonElevation(
+                    defaultElevation = if (!isLocked && !isCompleted) 3.dp else 0.dp,
+                    pressedElevation = if (!isLocked && !isCompleted) 6.dp else 0.dp
                 )
+            ) {
+                Row(
+                    horizontalArrangement = Arrangement.Center,
+                    verticalAlignment = Alignment.CenterVertically,
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    Text(
+                        text = when {
+                            isCompleted -> "✓ Completed"
+                            isLocked    -> "🔒 Complete previous"
+                            else        -> "Start Activity"
+                        },
+                        fontSize = 12.sp,
+                        fontWeight = FontWeight.ExtraBold,
+                        color = when {
+                            isCompleted -> colors.textPrimary.copy(alpha = 0.4f)
+                            isLocked    -> colors.textPrimary.copy(alpha = 0.35f)
+                            else        -> Color.White
+                        }
+                    )
+                    if (!isCompleted && !isLocked) {
+                        Spacer(Modifier.width(6.dp))
+                        Icon(
+                            Icons.Default.ChevronRight,
+                            null,
+                            modifier = Modifier.size(16.dp),
+                            tint = Color.White
+                        )
+                    }
+                }
             }
         }
     }
@@ -577,17 +562,18 @@ private fun ActivityItemCard(
 @Composable
 private fun StatusChip(text: String, color: Color, colors: AppColorScheme) {
     Surface(
-        color    = color.copy(alpha = 0.12f),
+        color = color.copy(alpha = 0.14f),
         modifier = Modifier
             .padding(start = 6.dp)
-            .clip(RoundedCornerShape(6.dp))
+            .clip(RoundedCornerShape(8.dp))
+            .border(0.8.dp, color.copy(alpha = 0.25f), RoundedCornerShape(8.dp))
     ) {
         Text(
             text = text,
-            fontSize = 9.sp,
-            fontWeight = FontWeight.Bold,
+            fontSize = 10.sp,
+            fontWeight = FontWeight.ExtraBold,
             color = color,
-            modifier = Modifier.padding(horizontal = 7.dp, vertical = 3.dp)
+            modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp)
         )
     }
 }
@@ -595,14 +581,17 @@ private fun StatusChip(text: String, color: Color, colors: AppColorScheme) {
 @Composable
 private fun MiniChip(text: String, colors: AppColorScheme) {
     Surface(
-        color    = colors.bgMain,
-        modifier = Modifier.clip(RoundedCornerShape(6.dp))
+        color = colors.bgMain,
+        modifier = Modifier
+            .clip(RoundedCornerShape(8.dp))
+            .border(0.8.dp, colors.textPrimary.copy(alpha = 0.08f), RoundedCornerShape(8.dp))
     ) {
         Text(
             text = text,
-            fontSize = 10.sp,
-            color = colors.textPrimary.copy(alpha = 0.55f),
-            modifier = Modifier.padding(horizontal = 6.dp, vertical = 3.dp)
+            fontSize = 11.sp,
+            fontWeight = FontWeight.SemiBold,
+            color = colors.textPrimary.copy(alpha = 0.6f),
+            modifier = Modifier.padding(horizontal = 7.dp, vertical = 4.dp)
         )
     }
 }

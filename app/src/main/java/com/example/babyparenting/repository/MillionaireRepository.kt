@@ -14,10 +14,10 @@ class MillionaireRepository @Inject constructor(
 ) {
 
     // ===== GET ALL STRATEGIES =====
-    suspend fun getStrategies(): List<Strategy> = withContext(Dispatchers.IO) {
+    suspend fun getStrategies(userId: String): List<Strategy> = withContext(Dispatchers.IO) {
         try {
             Log.d("MillionaireRepo", "Fetching strategies from API...")
-            val response = apiService.getStrategies()
+            val response = apiService.getStrategies(userId)  // ← Pass userId
             Log.d("MillionaireRepo", "Got ${response.size} strategies from API")
             response
         } catch (e: Exception) {

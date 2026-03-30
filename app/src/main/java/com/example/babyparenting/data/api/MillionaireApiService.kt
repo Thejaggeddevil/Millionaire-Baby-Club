@@ -7,14 +7,14 @@ interface MillionaireApiService {
 
     companion object {
         // ⚠️ CHANGE THIS TO YOUR ACTUAL BACKEND URL
-        const val BASE_URL = "http://192.168.1.24:8000"  // Your FastAPI backend
+        const val BASE_URL = "http://192.168.1.21:8000"  // Your FastAPI backend
         // For emulator: http://10.0.2.2:8000
         // For real device: http://your-server-ip:8000
     }
 
     // ===== GET STRATEGIES =====
     @GET("/millionaire/strategies")
-    suspend fun getStrategies(): List<Strategy>
+    suspend fun getStrategies(@Query("user_id") userId: String): List<Strategy>
 
     // ===== GET ACTIVITIES BY STRATEGY =====
     @GET("/millionaire/activities/{strategy_id}")
